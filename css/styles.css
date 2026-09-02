@@ -83,9 +83,9 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
   background: var(--court-green);
   color: #fff;
 }
-.topbar-brand { display: flex; align-items: center; gap: 8px; }
-.brand-mark { display: flex; color: #fff; }
-.brand-text { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; }
+.topbar-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.brand-mark { display: flex; color: #fff; flex-shrink: 0; }
+.brand-text { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; flex-shrink: 0; }
 .topbar-right { display: flex; align-items: center; gap: 8px; }
 .topbar-season select {
   background: rgba(255,255,255,.14);
@@ -98,30 +98,67 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
 }
 .topbar-season select option { color: var(--ink); }
 
-#viewing-as-banner {
-  position: sticky;
-  top: 0;
-  z-index: 19;
+/* admin 用：app 名稱旁邊「切換檢視使用者」的標籤下拉選單。平常（檢視自己）
+   用跟 brand 一致的淡色標籤；正在檢視別人的資料時換成金色，跟原本提示列
+   用的顏色一致，讓 admin 一眼看出現在不是自己的視角。 */
+.account-switch { position: relative; min-width: 0; }
+.account-switch-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,.16);
+  border: 1px solid rgba(255,255,255,.4);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 9px 3px 11px;
+  font-size: .72rem;
+  font-weight: 700;
+  cursor: pointer;
+  max-width: 28vw;
+}
+.account-switch-tag span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-switch-tag--viewing {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #fff;
+}
+.account-switch-caret { flex-shrink: 0; opacity: .85; }
+.account-switch-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 190px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-card);
+  padding: 6px;
+}
+.account-switch-menu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 16px;
-  background: var(--gold);
-  color: #fff;
-  font-size: .8rem;
-  font-weight: 600;
-}
-#viewing-as-banner button {
-  border: 1px solid rgba(255,255,255,.6);
-  background: rgba(255,255,255,.15);
-  color: #fff;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
   border-radius: var(--radius-s);
-  padding: 4px 10px;
-  font-size: .78rem;
-  font-weight: 600;
-  white-space: nowrap;
+  color: var(--ink);
+  font-size: .82rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
+.account-switch-menu-item:hover:not(:disabled) { background: var(--surface-sunken); }
+.account-switch-menu-item.is-current { font-weight: 700; color: var(--court-green); }
+.account-switch-menu-item:disabled { opacity: .5; cursor: not-allowed; }
+.account-switch-menu-note { padding: 8px 10px; }
 
 .topbar-sync-btn {
   display: flex;

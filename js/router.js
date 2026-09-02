@@ -1,8 +1,25 @@
 // ---------- Minimal hash router ----------
 import { forceCloseModal } from './utils.js';
+import { api, ApiError } from './api.js';
+import { isLoggedIn, forceLogout } from './session.js';
 
 const routes = [];
 let lastPath = null;
+
+// Point 1: 每次切換 nav（路徑真的變了）時，順手用一支輕量的 API 檢查目前的
+// token 是否還有效——不 await、不阻塞畫面渲染，避免每次切 tab 都要多等一次
+// 網路來回。如果 token 已經失效（401，例如帳號被 admin 停用、重設密碼，或
+// 單純過期），就強制登出、整頁重新整理回到登入畫面。離線或其他網路錯誤時
+// 這裡會被吞掉，不影響原本靠本機快取瀏覽的體驗。
+function verifyTokenOnNavigate() {
+  if (!isLoggedIn()) return;
+  api.me().catch((err) => {
+    if (err instanceof ApiError && err.status === 401) {
+      forceLogout('登入狀態已失效，請重新登入');
+    }
+    // 其他錯誤（離線、逾時等）忽略，不影響目前頁面。
+  });
+}
 
 export function route(pattern, handler) {
   // pattern like '/seasons/:id'
@@ -29,7 +46,10 @@ async function resolve() {
   // actually changed.
   const pathChanged = path !== lastPath;
   lastPath = path;
-  if (pathChanged) forceCloseModal();
+  if (pathChanged) {
+    forceCloseModal();
+    verifyTokenOnNavigate();
+  }
   for (const r of routes) {
     const m = path.match(r.regex);
     if (m) {

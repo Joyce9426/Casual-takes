@@ -1,6 +1,6 @@
 import { route, startRouter, refreshCurrentRoute, navigate } from './router.js';
 import { getById } from './db.js';
-import { renderTopbarSeasonPicker, renderViewingAsBanner } from './topbar.js';
+import { renderTopbarSeasonPicker, renderAccountSwitcher } from './topbar.js';
 import { renderLoginScreen } from './authGate.js';
 import { syncNow, hydrateFromServer, initAutoSync } from './sync.js';
 import { toast } from './utils.js';
@@ -73,7 +73,7 @@ async function registerSW() {
 async function startApp() {
   initAutoSync();
   await renderTopbarSeasonPicker();
-  renderViewingAsBanner();
+  renderAccountSwitcher();
   startRouter();
   registerSW();
   setupSyncButton();
