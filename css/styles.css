@@ -1,0 +1,637 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&family=Overpass:ital,wght@0,100..900;1,100..900&display=swap');
+
+/* ---------- Design tokens ---------- */
+:root {
+  --court-green: #1F6F54;
+  --court-green-dark: #144A38;
+  --court-green-tint: #E4F0EA;
+  --court-blue: #2B4C7E;
+  --court-blue-tint: #E7ECF5;
+  --gold: #B8860B;
+  --gold-tint: #FBF1D8;
+  --female: #C98788;
+  --female-tint: #FFE1E740;
+  --crimson: #B3261E;
+  --crimson-tint: #FBE6E4;
+  --bg: #F3F6F4;
+  --surface: #FFFFFF;
+  --surface-sunken: #ECF1EE;
+  --line: #D8E0DB;
+  --ink: #16211C;
+  --ink-soft: #55645C;
+  --ink-faint: #8A9790;
+
+  --font-display: 'Noto Serif TC', serif;
+  --font-body: 'Noto Sans TC', system-ui, sans-serif;
+  --font-mono: 'Overpass', ui-monospace, monospace;
+
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+  --shadow-card: 0 1px 2px rgba(20,30,25,.06), 0 6px 20px rgba(20,30,25,.05);
+}
+
+* { box-sizing: border-box; }
+html {
+  /* Bumps every rem-based font-size in the app up ~12% for readability on phones
+     (tested against iPhone 11's 414px CSS viewport) without touching any layout
+     widths/breakpoints, since the app is built with flexible flex/grid layouts. */
+  font-size: 18px;
+}
+html, body { height: 100%; overscroll-behavior: none; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--court-blue); outline-offset: 2px; }
+
+h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- App shell ---------- */
+#app-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: 960px;
+  margin: 0 auto;
+  /* tabbar height + extra breathing room above the nav */
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  /* Lock to vertical panning so a horizontal drag (e.g. on a wide table)
+     can't drag the whole page sideways or trigger edge-swipe back/forward.
+     overscroll-behavior: none turns off the elastic rubber-band bounce.
+     Kept on #app-shell (not body) so position:fixed modals keep correct
+     width on iOS Safari / standalone PWA. */
+  touch-action: pan-y;
+  overscroll-behavior: none;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--court-green);
+  color: #fff;
+}
+.topbar-brand { display: flex; align-items: center; gap: 8px; }
+.brand-mark { display: flex; color: #fff; }
+.brand-text { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar-season select {
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: var(--radius-s);
+  padding: 6px 10px;
+  font-size: .85rem;
+  max-width: 40vw;
+}
+.topbar-season select option { color: var(--ink); }
+
+#viewing-as-banner {
+  position: sticky;
+  top: 0;
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--gold);
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 600;
+}
+#viewing-as-banner button {
+  border: 1px solid rgba(255,255,255,.6);
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  border-radius: var(--radius-s);
+  padding: 4px 10px;
+  font-size: .78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar-sync-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+.topbar-sync-btn:active { transform: translateY(1px); }
+.topbar-sync-btn.syncing svg { animation: sync-spin .8s linear infinite; }
+@keyframes sync-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.tabbar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  max-width: 960px;
+  margin: 0 auto;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px 8px;
+  font-size: .72rem;
+  color: var(--ink-faint);
+}
+.tabbar a.active { color: var(--court-green); font-weight: 700; }
+.tab-ic { font-size: 1.15rem; line-height: 1; }
+.tab-ic svg { opacity: .55; }
+.tab-icon {
+    width: 20px;
+    height: 20px;
+    fill: #ffb6c1;
+}
+.tabbar a.active .tab-ic svg {opacity: 1; }
+
+.view-root { flex: 1; padding: 10px 15px 17px; }
+
+/* ---------- Generic building blocks ---------- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card-muted {
+  background: var(--surface-sunken);
+  box-shadow: none;
+}
+.card-muted .list-row-title,
+.card-muted .list-row-meta { color: var(--ink-faint); }
+.card-title {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.section-eyebrow {
+  font-size: .72rem;
+  letter-spacing: .12em;
+  color: var(--court-green);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+/* Used on inner pages (season detail, session detail) so the title block + the
+   settings button stay pinned under the topbar while the rest of the page scrolls. */
+.page-head-sticky {
+  position: sticky;
+  top: 54px;
+  z-index: 15;
+  background: var(--bg);
+  padding: 10px 16px 12px;
+  margin: 0 -16px 6px;
+}
+.page-head-left { display: flex; align-items: flex-end; gap: 8px; min-width: 0; }
+.page-head h1 { font-size: 1.0rem; }
+.page-head .sub { color: var(--ink-soft); font-size: .82rem; margin-top: 2px; }
+.h1-nowrap { white-space: nowrap; font-size: clamp(.82rem, 3.4vw, .95rem); }
+.flex-wrap-head { flex-wrap: wrap; row-gap: 8px; }
+.icon-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.icon-action-btn:active { transform: translateY(1px); }
+.icon-action-btn img { width: 17px; height: 17px; display: block; }
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+.back-btn:active { transform: translateY(1px); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: var(--radius-s);
+  padding: 9px 14px;
+  font-size: .85rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--court-green); color: #fff; }
+.btn-primary:hover { background: var(--court-green-dark); }
+.btn-ghost { background: transparent; color: var(--court-green); border: 1px solid var(--court-green); }
+.btn-danger { background: var(--crimson-tint); color: var(--crimson); }
+.btn-sm { padding: 6px 10px; font-size: .78rem; }
+.btn-block { width: 100%; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 1rem;
+}
+.icon-btn:hover { color: var(--court-blue); }
+
+.field { margin-bottom: 12px; }
+.field label {
+  display: block;
+  font-size: .78rem;
+  color: var(--ink-soft);
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+.field input[type=text],
+.field input[type=number],
+.field input[type=date],
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 9px 10px;
+  font-size: 1rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+}
+.field textarea { resize: vertical; min-height: 60px; }
+.field-row { display: flex; gap: 10px; }
+.field-row > .field { flex: 1; min-width: 0; }
+.field-row > .field input,
+.field-row > .field select { min-width: 0; box-sizing: border-box; }
+.field-hint { font-size: .72rem; color: var(--ink-faint); margin-top: 4px; }
+
+/* Shared searchable multi-select candidate picker (加入臨打/候補/季打) */
+.candidate-grid-wrap {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  margin-top: 6px;
+}
+.candidate-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 6px;
+}
+.candidate-grid-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  min-width: 0;
+}
+.candidate-grid-item:active { background: var(--surface-sunken); }
+.candidate-grid-item input[type=checkbox] { flex-shrink: 0; margin: 0; }
+.candidate-grid-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  text-align: left;
+}
+
+/* All form controls anywhere in the app must be >=16px so mobile browsers
+   (iOS Safari / Chrome) do not auto-zoom the viewport on focus. Using rem here
+   keeps them in proportion with the rest of the app's enlarged text. */
+input, select, textarea {
+  font-size: 1rem;
+}
+
+.radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.radio-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: .8rem;
+  cursor: pointer;
+  color: var(--ink-soft);
+  background: var(--surface);
+}
+.radio-chip input { display: none; }
+.radio-chip.checked {
+  background: var(--court-green-tint);
+  border-color: var(--court-green);
+  color: var(--court-green-dark);
+  font-weight: 700;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.list-row:last-child { border-bottom: none; }
+.list-row-main { display: flex; flex-direction: column; gap: 2px; }
+.list-row-title { font-weight: 700; font-size: .92rem; }
+.list-row-meta { font-size: .76rem; color: var(--ink-soft); }
+.list-row-actions { display: flex; align-items: center; gap: 6px; }
+
+.empty-state {
+  text-align: center;
+  padding: 36px 12px;
+  color: var(--ink-faint);
+}
+.empty-state .glyph { font-size: 1.8rem; margin-bottom: 8px; opacity: .6; }
+.empty-state p { margin: 4px 0; font-size: .85rem; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-green { background: var(--court-green-tint); color: var(--court-green-dark); }
+.badge-gold { background: var(--gold-tint); color: var(--gold); }
+.badge-blue { background: var(--court-blue-tint); color: var(--court-blue); }
+.badge-gray { background: var(--surface-sunken); color: var(--ink-soft); }
+.badge-crimson { background: var(--crimson); color: #fff; }
+
+/* ---------- Scoreboard (signature element) ---------- */
+.scoreboard {
+  background: linear-gradient(160deg, var(--court-green-dark), var(--court-green));
+  border-radius: var(--radius-l);
+  padding: 18px 16px;
+  color: #fff;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.scoreboard::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 34px);
+  pointer-events: none;
+}
+.scoreboard-label {
+  font-size: .68rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  opacity: .75;
+  margin-bottom: 10px;
+}
+.scoreboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 14px;
+  position: relative;
+}
+.scoreboard-cell .num {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.scoreboard-cell .cap {
+  font-size: .72rem;
+  opacity: .8;
+  margin-top: 3px;
+}
+/*.scoreboard-cell.warn .num { color: #FFD7A8; }*/
+
+/* ---------- Money highlight ---------- */
+.amount-refund { color: var(--court-green-dark); font-weight: 700; white-space: nowrap; }
+.amount-makeup { color: var(--crimson); font-weight: 700; white-space: nowrap; }
+/*.amount-makeup::before { content: '⚠'; font-size: .85em; }*/
+
+/* ---------- Tables ---------- */
+/* Safety net for narrow (360px) phones: if a table still doesn't fully fit its
+   card, it scrolls horizontally INSIDE the card instead of pushing content
+   (like the delete ✕ button) outside the page's visible width. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Opt back into horizontal panning inside the pan-y #app-shell. */
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+}
+table.roster { width: 100%; border-collapse: collapse; font-size: .84rem; table-layout: fixed; }
+table.roster th {
+  text-align: left;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-faint);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.roster th.roster-group-head-male {
+  color: var(--court-blue);
+}
+table.roster th.roster-group-head-female {
+  color: var(--gold);
+}
+table.roster td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
+table.roster tr:last-child td { border-bottom: none; }
+table.roster tr.row-unpaid  {  border-left: 3px solid #C42F6D80; }
+table.roster input[type=checkbox] { width: 18px; height: 18px; margin-right: 4px; }
+table.roster td:has(> input[type=checkbox]) { padding-right: 14px; }
+.roster-name { font-weight: 600; overflow-wrap: anywhere; }
+.roster-name .badge { display: block; width: fit-content; margin-top: 3px; }
+.gender-tag { font-size: .68rem; color: var(--ink-faint); margin-left: 5px; }
+.roster-group-head {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--court-blue);
+  padding: 10px 8px 4px;
+}
+.roster-group-head-male,
+.roster-group-head-female {
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  margin-bottom: 4px;
+}
+.roster-group-head-male { background: var(--court-blue-tint); color: var(--court-blue); }
+.roster-group-head-female { background: var(--gold-tint); color: var(--gold); }
+input.fee-input {
+  width: 84px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+select.inline-select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 4px;
+  font-size: .76rem;
+  background: #fff;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.icon-btn { min-width: 28px; text-align: center; }
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--court-blue-tint);
+  border-radius: var(--radius-s);
+  padding: 10px;
+  margin-bottom: 10px;
+  font-size: .8rem;
+}
+.batch-bar strong { color: var(--court-blue); }
+
+/* ---------- Tabs within a page ---------- */
+.subtabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.subtabs button {
+  background: none; border: none; cursor: pointer;
+  padding: 9px 4px; margin-right: 14px;
+  font-size: .757rem; font-weight: 600; color: var(--ink-faint);
+  border-bottom: 2px solid transparent;
+}
+.subtabs button.active { color: var(--court-green); border-color: var(--court-green); }
+
+/* ---------- Modal ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,25,20,.42);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 100;
+}
+@media (min-width: 640px) {
+  .modal-backdrop { align-items: center; }
+}
+.modal-panel {
+  background: var(--surface);
+  width: 100%; max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  padding: 20px;
+  animation: modal-in .18s ease-out;
+  /* Stop over-scroll inside the modal from chaining into the page behind. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 640px) {
+  .modal-panel { border-radius: var(--radius-l); }
+}
+@keyframes modal-in { from { transform: translateY(16px); opacity:.4; } to { transform: translateY(0); opacity:1; } }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* ---------- Toast ---------- */
+.toast-root {
+  position: fixed;
+  bottom: calc(97px + env(safe-area-inset-bottom, 0px)); left: 0; right: 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; z-index: 200; pointer-events: none;
+}
+.toast {
+  background: var(--ink);
+  color: #fff;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: .8rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,.2);
+  animation: toast-in .16s ease-out;
+}
+@keyframes toast-in { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel, .toast { animation: none; }
+}
+
+/* ---------- Utility ---------- */
+.flex { display: flex; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.gap-8 { gap: 8px; }
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.text-right { text-align: right; }
+.text-soft { color: var(--ink-soft); }
+.text-faint { color: var(--ink-faint); }
+.small { font-size: .78rem; }
+.hidden { display: none !important; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.divider { height: 1px; background: var(--line); margin: 14px 0; }
+.detail-toggle-btn {
+  border-radius: var(--radius-s) var(--radius-s) 0 0 !important;
+  margin-bottom: 0 !important;
+}
+.detail-expand {
+  background: var(--surface-sunken);
+  border-radius: 0 0 var(--radius-s) var(--radius-s);
+  padding: 10px 12px;
+  margin-top: 0;
+}
