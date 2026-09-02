@@ -50,7 +50,7 @@ export async function renderAdminUsers(root) {
         </div>
         <div class="field">
           <label>密碼</label>
-          <input type="text" id="new-user-password" autocomplete="off" placeholder="至少 8 個字元">
+          <input type="text" id="new-user-password" autocomplete="off" placeholder="至少 6 個字元">
         </div>
         <label style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
           <input type="checkbox" id="new-user-admin">
@@ -76,7 +76,7 @@ export async function renderAdminUsers(root) {
       const username = usernameInput.value.trim();
       const password = passwordInput.value;
       if (!username || !password) { toast('請輸入帳號與密碼'); return; }
-      if (password.length < 8) { toast('密碼至少需要 8 個字元'); return; }
+      if (password.length < 6) { toast('密碼至少需要 6 個字元'); return; }
       const role = adminCheckbox.checked ? 'admin' : 'user';
       const result = await withErrorToast(() => api.createUser({ username, password, role }));
       if (!result) return;
@@ -157,7 +157,7 @@ export async function renderAdminUsers(root) {
         <p class="small text-soft">重設後，這個帳號目前所有裝置的登入狀態都會立刻失效，需要用新密碼重新登入。</p>
         <div class="field">
           <label>新密碼</label>
-          <input type="text" id="reset-password-input" autocomplete="off" placeholder="至少 8 個字元">
+          <input type="text" id="reset-password-input" autocomplete="off" placeholder="至少 6 個字元">
         </div>
       `,
       actions: [
@@ -167,7 +167,7 @@ export async function renderAdminUsers(root) {
           primary: true,
           onClick: async (close, panel) => {
             const password = panel.querySelector('#reset-password-input').value;
-            if (!password || password.length < 8) { toast('密碼至少需要 8 個字元'); return; }
+            if (!password || password.length < 6) { toast('密碼至少需要 6 個字元'); return; }
             const result = await withErrorToast(() => api.updateUser(userId, { password }));
             if (!result) return;
             close();
