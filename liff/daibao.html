@@ -12,7 +12,8 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
     background: #F5F7F8;
     color: #16211C;
-    padding: 20px 18px 32px;
+    /* 底部留空間給固定住的送出按鈕列，內容才不會被蓋住 */
+    padding: 20px 18px 130px;
   }
   h1 { font-size: 20px; margin: 4px 0 2px; }
   .subtitle { font-size: 13px; color: #6C6C6C; margin: 0 0 20px; }
@@ -25,19 +26,18 @@
     border-radius: 8px;
     background: #fff;
   }
-  .gender-row { display: flex; gap: 10px; }
-  .gender-btn {
-    flex: 1;
-    padding: 12px 0;
-    border-radius: 8px;
-    border: 1px solid #D5DAD8;
-    background: #fff;
-    font-size: 15px;
+  .gender-input-row { display: flex; gap: 10px; }
+  .gender-input-col { flex: 1; }
+  .gender-input-label {
+    display: block;
+    font-size: 13px;
     font-weight: bold;
+    margin-bottom: 6px;
     text-align: center;
   }
-  .gender-btn.selected.male { background: #4A90E2; border-color: #4A90E2; color: #fff; }
-  .gender-btn.selected.female { background: #E24A8E; border-color: #E24A8E; color: #fff; }
+  .gender-input-label.male { color: #4A90E2; }
+  .gender-input-label.female { color: #E24A8E; }
+  .hint-note { font-size: 12px; color: #9D9D9D; margin: 10px 2px 0; }
   .checklist { margin-top: 4px; }
   .check-item {
     display: flex;
@@ -69,7 +69,6 @@
   .log-more { font-size: 12px; color: #9D9D9D; text-align: center; margin-top: 4px; }
   .submit-btn {
     width: 100%;
-    margin-top: 26px;
     padding: 14px 0;
     border: none;
     border-radius: 8px;
@@ -80,48 +79,58 @@
   }
   .submit-btn:disabled { background: #A9B7B1; }
   .cancel-mode .submit-btn { background: #B3261E; }
-  /* 結果文字改成貼在頂部、跟著捲動位置固定住（sticky）——名單/勾選清單
-     筆數一多，頁面會變長，結果文字如果留在最下面，送出後很容易被擋在畫面
-     外看不到，一定要滾到底才看得到。 */
-  .status {
-    position: sticky;
-    top: 0;
-    z-index: 5;
+  /* 送出按鈕＋結果文字固定貼在畫面最下面——名單/勾選清單筆數一多，頁面會
+     變長，這兩個東西如果留在內容裡面，很容易被擋在畫面外，一定要滾到底
+     才看得到；固定住之後不管內容多長都一定看得到。 */
+  .action-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: #F5F7F8;
-    margin: 0 0 14px;
-    padding: 8px 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+    padding: 12px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 10;
+  }
+  .status {
+    margin: 0 0 10px;
     font-size: 14px;
     color: #6C6C6C;
     text-align: center;
     min-height: 20px;
   }
-  .status:empty { padding: 0; margin: 0; min-height: 0; }
+  .status:empty { margin: 0; min-height: 0; }
   .status.error { color: #B3261E; }
 </style>
 </head>
 <body>
   <h1 id="heading">代報名</h1>
   <p class="subtitle" id="subtitle">請輸入要報名的人的姓名與性別</p>
-  <p class="status" id="status"></p>
 
   <form id="form">
     <div id="registerFields">
-      <label for="name">姓名</label>
-      <input type="text" id="name" autocomplete="off" placeholder="例如：王小明" />
-
-      <label>性別</label>
-      <div class="gender-row">
-        <button type="button" class="gender-btn male" data-gender="男">男</button>
-        <button type="button" class="gender-btn female" data-gender="女">女</button>
+      <div class="gender-input-row">
+        <div class="gender-input-col">
+          <span class="gender-input-label male">男</span>
+          <input type="text" id="maleNames" autocomplete="off" placeholder="王小明 陳大文" />
+        </div>
+        <div class="gender-input-col">
+          <span class="gender-input-label female">女</span>
+          <input type="text" id="femaleNames" autocomplete="off" placeholder="陳雅婷 林小美" />
+        </div>
       </div>
+      <p class="hint-note">多人請用空白分隔，某一邊沒有人可以留空</p>
     </div>
 
     <div id="cancelFields" class="checklist" hidden></div>
-
-    <button type="submit" class="submit-btn" id="submitBtn" disabled>送出</button>
   </form>
 
   <div id="logFields" hidden></div>
+
+  <div class="action-bar">
+    <p class="status" id="status"></p>
+    <button type="submit" form="form" class="submit-btn" id="submitBtn" disabled>送出</button>
+  </div>
 
 <script>
   // 這個頁面是獨立的靜態頁面，跟 PWA 主體（登入、雲端同步）完全無關。
@@ -165,11 +174,10 @@
   const registerFields = $('registerFields');
   const cancelFields = $('cancelFields');
   const logFields = $('logFields');
-  const nameInput = $('name');
+  const maleNamesInput = $('maleNames');
+  const femaleNamesInput = $('femaleNames');
   const submitBtn = $('submitBtn');
   const statusEl = $('status');
-  const genderBtns = Array.from(document.querySelectorAll('.gender-btn'));
-  let selectedGender = null;
   let cancelItems = []; // [{id, name, gender, registeredForSelf}]
 
   function setStatus(text, isError) {
@@ -201,22 +209,22 @@
     return `${m[1]}/${Number(m[2])}/${Number(m[3])}`;
   }
 
+  // 把「王小明 陳大文」這種用空白分隔的輸入，拆成去除空白、過濾空字串的
+  // 姓名陣列——這樣同一格多打幾個空白、或整格留空，都不會出錯。
+  function parseNames(raw) {
+    return String(raw || '').trim().split(/\s+/).filter(Boolean);
+  }
+
   function updateRegisterSubmitState() {
-    submitBtn.disabled = !(nameInput.value.trim() && selectedGender);
+    submitBtn.disabled = !(parseNames(maleNamesInput.value).length || parseNames(femaleNamesInput.value).length);
   }
 
   function updateCancelSubmitState() {
     submitBtn.disabled = !cancelFields.querySelector('input[type="checkbox"]:checked');
   }
 
-  genderBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      selectedGender = btn.dataset.gender;
-      genderBtns.forEach((b) => b.classList.toggle('selected', b === btn));
-      updateRegisterSubmitState();
-    });
-  });
-  nameInput.addEventListener('input', updateRegisterSubmitState);
+  maleNamesInput.addEventListener('input', updateRegisterSubmitState);
+  femaleNamesInput.addEventListener('input', updateRegisterSubmitState);
 
   const { date, sid, mode } = readParams();
 
@@ -368,9 +376,13 @@
   if (mode !== 'log' && (!date || !sid)) {
     setStatus('缺少場次資訊，請重新從名單卡片點擊按鈕進入。', true);
     submitBtn.disabled = true;
-    nameInput.disabled = true;
-    genderBtns.forEach((b) => (b.disabled = true));
+    maleNamesInput.disabled = true;
+    femaleNamesInput.disabled = true;
   }
+
+  // log 模式沒有送出這件事，按鈕不需要出現（但結果文字列仍保留，log 模式
+  // 自己的載入中/失敗訊息會顯示在同一個位置）。
+  if (mode === 'log') submitBtn.hidden = true;
 
   function getMyUserId() {
     try { return liff.getDecodedIDToken()?.sub || null; } catch (e) { return null; }
@@ -436,17 +448,21 @@
         if (success) successText = `已取消：${canceled.join('、')}`;
         if (failed.length) failedText = `⚠️ 未取消：${failed.join('、')}`;
       } else {
-        const name = nameInput.value.trim();
-        if (!name || !selectedGender) { submitBtn.disabled = false; setStatus(''); return; }
+        const entries = [
+          ...parseNames(maleNamesInput.value).map((n) => ({ name: n, gender: '男' })),
+          ...parseNames(femaleNamesInput.value).map((n) => ({ name: n, gender: '女' })),
+        ];
+        if (!entries.length) { submitBtn.disabled = false; setStatus(''); return; }
         const data = await apiPost('/line/daibao-register', {
           sessionId: sid,
           lineUserId: myUserId,
-          name,
-          gender: selectedGender,
+          entries,
         });
-        success = Boolean(data.added);
-        if (success) successText = `${name}（${selectedGender}）報名成功`;
-        else failedText = data.message || '⚠️ 已經在本場次名單中';
+        const added = data.added || [];
+        const failed = data.failed || [];
+        success = added.length > 0;
+        if (success) successText = `已新增：${added.join('、')}`;
+        if (failed.length) failedText = `⚠️ 未新增：${failed.join('、')}`;
       }
 
       if (success) {
