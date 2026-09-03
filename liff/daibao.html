@@ -176,10 +176,14 @@
 
   const { date, mode } = readParams();
 
-  function renderCancelChecklist(items) {
+  function renderCancelChecklist(items, myUserId) {
     cancelItems = items;
     if (!items.length) {
-      cancelFields.innerHTML = '<p class="empty-note">目前沒有可以取消的報名（可能是你還沒報名或代報名任何人，或已經被取消過了）。</p>';
+      // 順便印出這次查詢用的 LINE 使用者 ID，方便跟在聊天室打 $userid 拿到
+      // 的 ID 比對——如果兩個不一樣，通常是這個 LIFF app 掛的 Channel跟你
+      // 機器人的 Messaging API Channel 不屬於同一個 Provider，導致 LINE
+      // 給的使用者 ID 對不起來（見 relay/README.md 的疑難排解說明）。
+      cancelFields.innerHTML = `<p class="empty-note">目前沒有可以取消的報名（可能是你還沒報名或代報名任何人，或已經被取消過了）。<br>你的識別碼：${escapeHtml(myUserId || '')}</p>`;
       submitBtn.disabled = true;
       return;
     }
@@ -233,7 +237,7 @@
         return;
       }
       setStatus('');
-      renderCancelChecklist(data.items || []);
+      renderCancelChecklist(data.items || [], myUserId);
     } catch (err) {
       console.error(err);
       setStatus('載入失敗，請確認網路連線。', true);
