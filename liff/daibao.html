@@ -50,6 +50,8 @@
     margin-bottom: 8px;
   }
   .check-item input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; }
+  .check-item-all { background: #EDEFEE; margin-bottom: 12px; }
+  .check-item-all .who { color: #6C6C6C; }
   .check-item .who { font-size: 15px; font-weight: bold; }
   .check-item .tag { font-size: 12px; color: #6C6C6C; margin-left: 6px; font-weight: normal; }
   .empty-note { font-size: 14px; color: #6C6C6C; padding: 20px 0; text-align: center; }
@@ -112,14 +114,14 @@
       <div class="gender-input-row">
         <div class="gender-input-col">
           <span class="gender-input-label male">男</span>
-          <input type="text" id="maleNames" autocomplete="off" placeholder="王小明 陳大文" />
+          <input type="text" id="maleNames" autocomplete="off" placeholder="請輸入" />
         </div>
         <div class="gender-input-col">
           <span class="gender-input-label female">女</span>
-          <input type="text" id="femaleNames" autocomplete="off" placeholder="陳雅婷 林小美" />
+          <input type="text" id="femaleNames" autocomplete="off" placeholder="請輸入" />
         </div>
       </div>
-      <p class="hint-note">多人請用空白分隔，某一邊沒有人可以留空</p>
+      <p class="hint-note">多人請用空白分隔</p>
     </div>
 
     <div id="cancelFields" class="checklist" hidden></div>
@@ -220,7 +222,7 @@
   }
 
   function updateCancelSubmitState() {
-    submitBtn.disabled = !cancelFields.querySelector('input[type="checkbox"]:checked');
+    submitBtn.disabled = !cancelFields.querySelector('input[type="checkbox"][data-index]:checked');
   }
 
   maleNamesInput.addEventListener('input', updateRegisterSubmitState);
@@ -228,25 +230,36 @@
 
   const { date, sid, mode } = readParams();
 
-  function renderCancelChecklist(items, myUserId) {
+  function renderCancelChecklist(items) {
     cancelItems = items;
     if (!items.length) {
-      // 順便印出這次查詢用的 LINE 使用者 ID，方便跟在聊天室打 $userid 拿到
-      // 的 ID 比對——如果兩個不一樣，通常是這個 LIFF app 掛的 Channel跟你
-      // 機器人的 Messaging API Channel 不屬於同一個 Provider，導致 LINE
-      // 給的使用者 ID 對不起來（見 relay/README.md 的疑難排解說明）。
-      cancelFields.innerHTML = `<p class="empty-note">目前沒有可以取消的報名（可能是你還沒報名或代報名任何人，或已經被取消過了）。<br>你的識別碼：${escapeHtml(myUserId || '')}</p>`;
+      cancelFields.innerHTML = '<p class="empty-note">目前沒有您可以取消的報名</p>';
       submitBtn.disabled = true;
       return;
     }
-    cancelFields.innerHTML = items.map((item, i) => `
+    cancelFields.innerHTML = `
+      <label class="check-item check-item-all">
+        <input type="checkbox" id="selectAllCheckbox" />
+        <span class="who">全選</span>
+      </label>
+    ` + items.map((item, i) => `
       <label class="check-item">
         <input type="checkbox" data-index="${i}" />
         <span class="who">${escapeHtml(item.name)}（${item.gender}）${item.registeredForSelf ? '<span class="tag">本人</span>' : ''}</span>
       </label>
     `).join('');
-    cancelFields.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-      cb.addEventListener('change', updateCancelSubmitState);
+
+    const itemCheckboxes = Array.from(cancelFields.querySelectorAll('input[type="checkbox"][data-index]'));
+    const selectAllCheckbox = cancelFields.querySelector('#selectAllCheckbox');
+    itemCheckboxes.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        selectAllCheckbox.checked = itemCheckboxes.every((c) => c.checked);
+        updateCancelSubmitState();
+      });
+    });
+    selectAllCheckbox.addEventListener('change', () => {
+      itemCheckboxes.forEach((cb) => { cb.checked = selectAllCheckbox.checked; });
+      updateCancelSubmitState();
     });
     updateCancelSubmitState();
   }
@@ -343,7 +356,7 @@
         return;
       }
       setStatus('');
-      renderCancelChecklist(data.items || [], myUserId);
+      renderCancelChecklist(data.items || []);
     } catch (err) {
       console.error(err);
       setStatus('載入失敗，請確認網路連線。', true);
@@ -353,7 +366,7 @@
 
   if (mode === 'cancel') {
     document.title = '取消';
-    heading.textContent = '代取消報名';
+    heading.textContent = '取消報名';
     subtitle.textContent = `勾選要取消 ${formatDateLabel(date)} 場次的人（只會列出你自己或你代報名的人）`;
     form.classList.add('cancel-mode');
     registerFields.hidden = true;
@@ -433,7 +446,7 @@
       let failedText = '';
 
       if (mode === 'cancel') {
-        const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"]:checked'))
+        const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"][data-index]:checked'))
           .map((cb) => cancelItems[Number(cb.dataset.index)])
           .filter(Boolean);
         if (!checked.length) { submitBtn.disabled = false; setStatus(''); return; }
@@ -461,7 +474,7 @@
         const added = data.added || [];
         const failed = data.failed || [];
         success = added.length > 0;
-        if (success) successText = `已新增：${added.join('、')}`;
+        if (success) successText = `已報名：${added.join('、')}`;
         if (failed.length) failedText = `⚠️ 未新增：${failed.join('、')}`;
       }
 
