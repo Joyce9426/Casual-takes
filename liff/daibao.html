@@ -53,6 +53,20 @@
   .check-item .who { font-size: 15px; font-weight: bold; }
   .check-item .tag { font-size: 12px; color: #6C6C6C; margin-left: 6px; font-weight: normal; }
   .empty-note { font-size: 14px; color: #6C6C6C; padding: 20px 0; text-align: center; }
+  .log-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 11px 14px;
+    border: 1px solid #D5DAD8;
+    border-radius: 8px;
+    background: #fff;
+    margin-bottom: 8px;
+  }
+  .log-item .time { font-size: 12px; color: #9D9D9D; }
+  .log-item .who { font-size: 14px; font-weight: bold; }
+  .log-item .action { font-size: 14px; color: #16211C; }
+  .log-more { font-size: 12px; color: #9D9D9D; text-align: center; margin-top: 4px; }
   .submit-btn {
     width: 100%;
     margin-top: 26px;
@@ -91,6 +105,8 @@
     <button type="submit" class="submit-btn" id="submitBtn" disabled>送出</button>
   </form>
 
+  <div id="logFields" hidden></div>
+
   <p class="status" id="status"></p>
 
 <script>
@@ -109,6 +125,10 @@
   // GET API 只是給頁面顯示清單用，真正「能不能取消」的權限判斷還是在
   // Worker 收到 webhook 訊息時、用 LINE 保證正確的使用者身分重新檢查一次。
   //
+  // 記錄：純唯讀顯示，呼叫 relay Worker 的 GET /line/session-log 拿這個
+  // 場次的操作歷史直接畫出來，不會呼叫 liff.sendMessages()、不會送出任何
+  // 訊息回聊天室，也不需要知道是誰在看（不用 openid）。
+  //
   // 部署前請把下面兩個值改成你自己的設定：
   // - LIFF_ID：LINE Developers Console 建立 LIFF app 拿到的 ID
   //   （步驟看 relay/README.md 的「代報名（LIFF）設定」章節）
@@ -126,6 +146,7 @@
   const form = $('form');
   const registerFields = $('registerFields');
   const cancelFields = $('cancelFields');
+  const logFields = $('logFields');
   const nameInput = $('name');
   const submitBtn = $('submitBtn');
   const statusEl = $('status');
@@ -148,10 +169,11 @@
       const qIndex = state.indexOf('?');
       if (qIndex >= 0) params = new URLSearchParams(state.slice(qIndex + 1));
     }
+    const rawMode = params.get('mode');
     return {
       date: params.get('date'),
       sid: params.get('sid'),
-      mode: params.get('mode') === 'cancel' ? 'cancel' : 'register',
+      mode: rawMode === 'cancel' ? 'cancel' : rawMode === 'log' ? 'log' : 'register',
     };
   }
 
@@ -207,6 +229,52 @@
     const div = document.createElement('div');
     div.textContent = String(str ?? '');
     return div.innerHTML;
+  }
+
+  function formatLogTime(ts) {
+    try {
+      return new Date(ts).toLocaleString('zh-TW', {
+        timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  async function loadSessionLog() {
+    setStatus('載入操作紀錄中…');
+    if (!sid) {
+      setStatus('缺少場次 ID，請重新從名單卡片點擊「記錄」按鈕進入。', true);
+      return;
+    }
+    if (!RELAY_BASE_URL || RELAY_BASE_URL.includes('請貼上')) {
+      setStatus('daibao.html 裡的 RELAY_BASE_URL 尚未設定，請先完成部署設定。', true);
+      return;
+    }
+    try {
+      const res = await fetch(`${RELAY_BASE_URL.replace(/\/$/, '')}/line/session-log?sessionId=${encodeURIComponent(sid)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus(data.error || '載入失敗，請稍後再試。', true);
+        return;
+      }
+      setStatus('');
+      const items = data.items || [];
+      if (!items.length) {
+        logFields.innerHTML = '<p class="empty-note">目前沒有任何操作紀錄。</p>';
+        return;
+      }
+      logFields.innerHTML = items.map((item) => `
+        <div class="log-item">
+          <span class="time">${escapeHtml(formatLogTime(item.createdAt))}</span>
+          <span class="who">${escapeHtml(item.actor)}</span>
+          <span class="action">${escapeHtml(item.action)}</span>
+        </div>
+      `).join('') + (data.hasMore ? '<p class="log-more">僅顯示最近 20 筆</p>' : '');
+    } catch (err) {
+      console.error(err);
+      setStatus('載入失敗，請確認網路連線。', true);
+    }
   }
 
   async function loadCancelChecklist() {
@@ -267,11 +335,16 @@
     registerFields.hidden = true;
     cancelFields.hidden = false;
     submitBtn.textContent = '取消報名';
+  } else if (mode === 'log') {
+    heading.textContent = '操作紀錄';
+    subtitle.textContent = `${formatDateLabel(date)} 場次的報名/取消紀錄`;
+    form.hidden = true;
+    logFields.hidden = false;
   } else {
     subtitle.textContent = `幫別人報名 ${formatDateLabel(date)} 的場次`;
   }
 
-  if (!date) {
+  if (mode !== 'log' && !date) {
     setStatus('缺少場次日期，請重新從名單卡片點擊按鈕進入。', true);
     submitBtn.disabled = true;
     nameInput.disabled = true;
@@ -320,6 +393,7 @@
       return;
     }
     if (mode === 'cancel') loadCancelChecklist();
+    else if (mode === 'log') loadSessionLog();
   }).catch((err) => {
     console.error(err);
     setStatus('LIFF 初始化失敗，請確認 daibao.html 裡的 LIFF_ID 是否已正確設定。', true);
