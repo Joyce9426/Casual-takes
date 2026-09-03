@@ -208,20 +208,28 @@
   async function loadCancelChecklist() {
     setStatus('載入可取消名單中…');
     const ctx = liff.getContext();
-    const chatId = ctx.type === 'group' ? ctx.groupId : ctx.type === 'room' ? ctx.roomId : null;
-    if (!chatId) {
-      // 印出實際偵測到的 context 類型，方便排查——正常從群組的名單卡片點
-      // 進來時這裡應該要是 "group"。
-      setStatus(`請在聊天室的名單卡片中開啟此頁面。（偵測到的類型：${ctx.type || '（無）'}）`, true);
-      cancelFields.innerHTML = '';
-      return;
-    }
+
     let myUserId = null;
     try {
       myUserId = liff.getDecodedIDToken()?.sub || null;
     } catch (e) { /* ignore */ }
     if (!myUserId) {
       setStatus('無法取得您的身分資訊，請確認 LIFF app 的 Scope 有勾選 openid。', true);
+      cancelFields.innerHTML = '';
+      return;
+    }
+
+    // 一對一聊天室（utou）沒有 groupId/roomId——這種情境下「聊天室」本身
+    // 就是「你自己跟機器人的對話」，跟後端判斷 chatId 的邏輯一致，直接用
+    // 自己的 LINE 使用者 ID 當 chatId。
+    const chatId = ctx.type === 'group' ? ctx.groupId
+      : ctx.type === 'room' ? ctx.roomId
+      : ctx.type === 'utou' ? myUserId
+      : null;
+    if (!chatId) {
+      // 印出實際偵測到的 context 類型，方便排查——正常從群組的名單卡片點
+      // 進來時這裡應該要是 "group"。
+      setStatus(`請在聊天室的名單卡片中開啟此頁面。（偵測到的類型：${ctx.type || '（無）'}）`, true);
       cancelFields.innerHTML = '';
       return;
     }
@@ -253,7 +261,7 @@
     form.classList.add('cancel-mode');
     registerFields.hidden = true;
     cancelFields.hidden = false;
-    submitBtn.textContent = '取消勾選的人';
+    submitBtn.textContent = '取消報名';
   } else {
     subtitle.textContent = `幫別人報名 ${formatDateLabel(date)} 的場次`;
   }
