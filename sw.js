@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sunday-roster-m-v2';
+const CACHE_NAME = 'sunday-roster-m-v3';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -54,6 +54,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  // 只快取這個網站自己的靜態資源。後端 Worker 的 API（/auth/me、/sync/pull
+  // 等）是不同網域，完全不要讓這裡的快取邏輯碰——不然像 /auth/me 這種網址
+  // 固定不變的請求，一旦某次因為 token 失效收到 401，這個失敗回應會被永久
+  // 快取住，之後就算重新登入拿到新 token，也會一直吃到快取住的舊 401，被
+  // 誤判成登入又失效了，馬上被踢出去（症狀：重新登入後馬上被登出，只有
+  // 清快取才能正常登入）。
+  if (new URL(req.url).origin !== self.location.origin) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(
