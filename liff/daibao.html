@@ -80,13 +80,40 @@
   }
   .submit-btn:disabled { background: #A9B7B1; }
   .cancel-mode .submit-btn { background: #B3261E; }
-  .status { margin-top: 18px; font-size: 14px; color: #6C6C6C; text-align: center; min-height: 20px; }
+  /* 結果文字改成貼在頂部、跟著捲動位置固定住（sticky）——名單/勾選清單
+     筆數一多，頁面會變長，結果文字如果留在最下面，送出後很容易被擋在畫面
+     外看不到，一定要滾到底才看得到。 */
+  .status {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #F5F7F8;
+    margin: 0 0 14px;
+    padding: 8px 0;
+    font-size: 14px;
+    color: #6C6C6C;
+    text-align: center;
+    min-height: 20px;
+  }
+  .status:empty { padding: 0; margin: 0; min-height: 0; }
   .status.error { color: #B3261E; }
+  .roster-summary { margin-top: 4px; }
+  .roster-group {
+    padding: 12px 14px;
+    border: 1px solid #D5DAD8;
+    border-radius: 8px;
+    background: #fff;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .roster-group .label { font-weight: bold; margin-right: 6px; }
 </style>
 </head>
 <body>
   <h1 id="heading">代報名</h1>
   <p class="subtitle" id="subtitle">請輸入要報名的人的姓名與性別</p>
+  <p class="status" id="status"></p>
 
   <form id="form">
     <div id="registerFields">
@@ -106,8 +133,7 @@
   </form>
 
   <div id="logFields" hidden></div>
-
-  <p class="status" id="status"></p>
+  <div id="resultFields" hidden></div>
 
 <script>
   // 這個頁面是獨立的靜態頁面，跟 PWA 主體（登入、雲端同步）完全無關。
@@ -142,6 +168,7 @@
   const registerFields = $('registerFields');
   const cancelFields = $('cancelFields');
   const logFields = $('logFields');
+  const resultFields = $('resultFields');
   const nameInput = $('name');
   const submitBtn = $('submitBtn');
   const statusEl = $('status');
@@ -224,6 +251,24 @@
     const div = document.createElement('div');
     div.textContent = String(str ?? '');
     return div.innerHTML;
+  }
+
+  // 代報名/代取消成功後顯示的最新名單摘要——取代原本「報名成功」這種純
+  // 文字訊息，直接讓人看到結果，不用再回去聊天室查一次。
+  function renderRosterSummary(roster) {
+    if (!roster) { resultFields.innerHTML = ''; return; }
+    const groups = [
+      ['女', roster.female],
+      ['男', roster.male],
+      ['候補', roster.waitlist],
+    ].filter(([, names]) => names && names.length);
+    if (!groups.length) {
+      resultFields.innerHTML = '<p class="empty-note">目前這場次還沒有人。</p>';
+      return;
+    }
+    resultFields.innerHTML = '<div class="roster-summary">' + groups.map(([label, names]) => `
+      <div class="roster-group"><span class="label">${label}（${names.length}）</span>${escapeHtml(names.join('、'))}</div>
+    `).join('') + '</div>';
   }
 
   function formatLogTime(ts) {
@@ -381,13 +426,18 @@
     submitBtn.disabled = true;
     setStatus('送出中…');
 
+    // 成功時不顯示「報名成功」這種文字，直接把表單換成最新名單；失敗原因
+    // （包含勾選多人時部分失敗的那幾個）還是要顯示出來。
     try {
-      let allOk;
+      let success = false;
+      let roster = null;
+      let failedText = '';
+
       if (mode === 'cancel') {
         const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"]:checked'))
           .map((cb) => cancelItems[Number(cb.dataset.index)])
           .filter(Boolean);
-        if (!checked.length) { submitBtn.disabled = false; return; }
+        if (!checked.length) { submitBtn.disabled = false; setStatus(''); return; }
         const data = await apiPost('/line/daibao-cancel', {
           sessionId: sid,
           lineUserId: myUserId,
@@ -395,27 +445,30 @@
         });
         const canceled = data.canceled || [];
         const failed = data.failed || [];
-        allOk = canceled.length > 0 && failed.length === 0;
-        const lines = [];
-        if (canceled.length) lines.push(`已取消：${canceled.join('、')}`);
-        if (failed.length) lines.push(`未取消：${failed.join('、')}`);
-        setStatus(lines.join('\n') || '沒有任何變更', !allOk);
+        success = canceled.length > 0;
+        if (failed.length) failedText = `⚠️ 未取消：${failed.join('、')}`;
+        if (success) roster = data.roster;
       } else {
         const name = nameInput.value.trim();
-        if (!name || !selectedGender) { submitBtn.disabled = false; return; }
+        if (!name || !selectedGender) { submitBtn.disabled = false; setStatus(''); return; }
         const data = await apiPost('/line/daibao-register', {
           sessionId: sid,
           lineUserId: myUserId,
           name,
           gender: selectedGender,
         });
-        allOk = Boolean(data.added);
-        setStatus(data.message || (allOk ? '報名成功' : '已經在名單中'), !allOk);
+        success = Boolean(data.added);
+        if (!success) failedText = data.message || '⚠️ 已經在本場次名單中';
+        if (success) roster = data.roster;
       }
 
-      if (allOk) {
-        setTimeout(() => { try { liff.closeWindow(); } catch (e2) {} }, 1200);
+      if (success) {
+        setStatus(failedText, Boolean(failedText));
+        form.hidden = true;
+        renderRosterSummary(roster);
+        resultFields.hidden = false;
       } else {
+        setStatus(failedText, true);
         submitBtn.disabled = false;
       }
     } catch (err) {
