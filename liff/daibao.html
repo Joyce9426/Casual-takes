@@ -38,6 +38,21 @@
   }
   .gender-btn.selected.male { background: #4A90E2; border-color: #4A90E2; color: #fff; }
   .gender-btn.selected.female { background: #E24A8E; border-color: #E24A8E; color: #fff; }
+  .checklist { margin-top: 4px; }
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 14px;
+    border: 1px solid #D5DAD8;
+    border-radius: 8px;
+    background: #fff;
+    margin-bottom: 8px;
+  }
+  .check-item input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; }
+  .check-item .who { font-size: 15px; font-weight: bold; }
+  .check-item .tag { font-size: 12px; color: #6C6C6C; margin-left: 6px; font-weight: normal; }
+  .empty-note { font-size: 14px; color: #6C6C6C; padding: 20px 0; text-align: center; }
   .submit-btn {
     width: 100%;
     margin-top: 26px;
@@ -60,14 +75,18 @@
   <p class="subtitle" id="subtitle">請輸入要報名的人的姓名與性別</p>
 
   <form id="form">
-    <label for="name">姓名</label>
-    <input type="text" id="name" autocomplete="off" placeholder="例如：王小明" required />
+    <div id="registerFields">
+      <label for="name">姓名</label>
+      <input type="text" id="name" autocomplete="off" placeholder="例如：王小明" />
 
-    <label>性別</label>
-    <div class="gender-row">
-      <button type="button" class="gender-btn male" data-gender="男">男</button>
-      <button type="button" class="gender-btn female" data-gender="女">女</button>
+      <label>性別</label>
+      <div class="gender-row">
+        <button type="button" class="gender-btn male" data-gender="男">男</button>
+        <button type="button" class="gender-btn female" data-gender="女">女</button>
+      </div>
     </div>
+
+    <div id="cancelFields" class="checklist" hidden></div>
 
     <button type="submit" class="submit-btn" id="submitBtn" disabled>送出</button>
   </form>
@@ -75,15 +94,28 @@
   <p class="status" id="status"></p>
 
 <script>
-  // 這個頁面是獨立的靜態頁面，跟 PWA 主體（登入、雲端同步）完全無關，也不需要
-  // 呼叫 relay Worker 的任何 API —— 送出表單時是用 liff.sendMessages() 把
-  // 「代報名 日期 姓名 性別」這句文字用「使用者身分」送進原本的聊天室，機器人
-  // 會把它當成一般文字訊息處理（跟直接手動打字一樣），這樣才能用 Reply API
-  // 回覆結果，不用 Push（LINE Push 有次數限制，Reply 沒有）。
+  // 這個頁面是獨立的靜態頁面，跟 PWA 主體（登入、雲端同步）完全無關。
   //
-  // 部署前請把下面這行改成你自己在 LINE Developers Console 建立的 LIFF ID
-  // （設定步驟看 relay/README.md 的「代報名（LIFF）設定」章節）。
+  // 代報名：送出表單時用 liff.sendMessages() 把「代報名 日期 姓名 性別」
+  // 這句文字用「使用者身分」送進原本的聊天室，機器人當成一般文字訊息處理
+  // （跟直接手動打字一樣），這樣才能用 Reply API 回覆結果，不用 Push
+  // （LINE Push 有次數限制，Reply 沒有）。這一步完全不需要呼叫 relay
+  // Worker 的任何 API。
+  //
+  // 代取消：多了一步——先呼叫 relay Worker 的 GET /line/cancelable，查出
+  // 「這個 LINE 使用者在這場次可以取消的人」（自己＋自己代報名的人），畫成
+  // 勾選清單；勾選送出時，一樣是組成一句「代取消 ...」文字用
+  // liff.sendMessages() 送進聊天室，走跟代報名一樣的 Reply 流程。這支
+  // GET API 只是給頁面顯示清單用，真正「能不能取消」的權限判斷還是在
+  // Worker 收到 webhook 訊息時、用 LINE 保證正確的使用者身分重新檢查一次。
+  //
+  // 部署前請把下面兩個值改成你自己的設定：
+  // - LIFF_ID：LINE Developers Console 建立 LIFF app 拿到的 ID
+  //   （步驟看 relay/README.md 的「代報名（LIFF）設定」章節）
+  // - RELAY_BASE_URL：你部署 relay/ 這個 Worker 的網址（跟 app/js/config.js
+  //   裡的 API_BASE_URL 是同一個）
   const LIFF_ID = '2011403632-tc3TOVTY';
+  const RELAY_BASE_URL = 'https://sunday-roster-m-relay.autoing.workers.dev';
 </script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
@@ -92,11 +124,14 @@
   const heading = $('heading');
   const subtitle = $('subtitle');
   const form = $('form');
+  const registerFields = $('registerFields');
+  const cancelFields = $('cancelFields');
   const nameInput = $('name');
   const submitBtn = $('submitBtn');
   const statusEl = $('status');
   const genderBtns = Array.from(document.querySelectorAll('.gender-btn'));
   let selectedGender = null;
+  let cancelItems = []; // [{id, name, gender, registeredForSelf}]
 
   function setStatus(text, isError) {
     statusEl.textContent = text || '';
@@ -122,25 +157,97 @@
     return `${m[1]}/${Number(m[2])}/${Number(m[3])}`;
   }
 
-  function updateSubmitState() {
+  function updateRegisterSubmitState() {
     submitBtn.disabled = !(nameInput.value.trim() && selectedGender);
+  }
+
+  function updateCancelSubmitState() {
+    submitBtn.disabled = !cancelFields.querySelector('input[type="checkbox"]:checked');
   }
 
   genderBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
       selectedGender = btn.dataset.gender;
       genderBtns.forEach((b) => b.classList.toggle('selected', b === btn));
-      updateSubmitState();
+      updateRegisterSubmitState();
     });
   });
-  nameInput.addEventListener('input', updateSubmitState);
+  nameInput.addEventListener('input', updateRegisterSubmitState);
 
   const { date, mode } = readParams();
+
+  function renderCancelChecklist(items) {
+    cancelItems = items;
+    if (!items.length) {
+      cancelFields.innerHTML = '<p class="empty-note">目前沒有可以取消的報名（可能是你還沒報名或代報名任何人，或已經被取消過了）。</p>';
+      submitBtn.disabled = true;
+      return;
+    }
+    cancelFields.innerHTML = items.map((item, i) => `
+      <label class="check-item">
+        <input type="checkbox" data-index="${i}" />
+        <span class="who">${escapeHtml(item.name)}（${item.gender}）${item.registeredForSelf ? '<span class="tag">本人</span>' : ''}</span>
+      </label>
+    `).join('');
+    cancelFields.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.addEventListener('change', updateCancelSubmitState);
+    });
+    updateCancelSubmitState();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = String(str ?? '');
+    return div.innerHTML;
+  }
+
+  async function loadCancelChecklist() {
+    setStatus('載入可取消名單中…');
+    const ctx = liff.getContext();
+    const chatId = ctx.type === 'group' ? ctx.groupId : ctx.type === 'room' ? ctx.roomId : null;
+    if (!chatId) {
+      setStatus('請在聊天室的名單卡片中開啟此頁面。', true);
+      cancelFields.innerHTML = '';
+      return;
+    }
+    let myUserId = null;
+    try {
+      myUserId = liff.getDecodedIDToken()?.sub || null;
+    } catch (e) { /* ignore */ }
+    if (!myUserId) {
+      setStatus('無法取得您的身分資訊，請確認 LIFF app 的 Scope 有勾選 openid。', true);
+      cancelFields.innerHTML = '';
+      return;
+    }
+    if (!RELAY_BASE_URL || RELAY_BASE_URL.includes('請貼上')) {
+      setStatus('daibao.html 裡的 RELAY_BASE_URL 尚未設定，請先完成部署設定。', true);
+      cancelFields.innerHTML = '';
+      return;
+    }
+    try {
+      const res = await fetch(`${RELAY_BASE_URL.replace(/\/$/, '')}/line/cancelable?date=${encodeURIComponent(date)}&chatId=${encodeURIComponent(chatId)}&lineUserId=${encodeURIComponent(myUserId)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus(data.error || '載入失敗，請稍後再試。', true);
+        cancelFields.innerHTML = '';
+        return;
+      }
+      setStatus('');
+      renderCancelChecklist(data.items || []);
+    } catch (err) {
+      console.error(err);
+      setStatus('載入失敗，請確認網路連線。', true);
+      cancelFields.innerHTML = '';
+    }
+  }
+
   if (mode === 'cancel') {
     heading.textContent = '代取消報名';
-    subtitle.textContent = `取消 ${formatDateLabel(date)} 場次中某人的報名（只能取消你自己或你代報名的人）`;
+    subtitle.textContent = `勾選要取消 ${formatDateLabel(date)} 場次的人（只會列出你自己或你代報名的人）`;
     form.classList.add('cancel-mode');
-    submitBtn.textContent = '送出取消';
+    registerFields.hidden = true;
+    cancelFields.hidden = false;
+    submitBtn.textContent = '取消勾選的人';
   } else {
     subtitle.textContent = `幫別人報名 ${formatDateLabel(date)} 的場次`;
   }
@@ -154,14 +261,24 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = nameInput.value.trim();
-    if (!name || !selectedGender || !date) return;
+    if (!date) return;
+
+    let text;
+    if (mode === 'cancel') {
+      const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"]:checked'))
+        .map((cb) => cancelItems[Number(cb.dataset.index)])
+        .filter(Boolean);
+      if (!checked.length) return;
+      const entries = checked.map((item) => `${item.name}（${item.gender}）#${item.id.slice(0, 8)}`).join('、');
+      text = `代取消 ${date} ${entries}`;
+    } else {
+      const name = nameInput.value.trim();
+      if (!name || !selectedGender) return;
+      text = `代報名 ${date} ${name} ${selectedGender}`;
+    }
 
     submitBtn.disabled = true;
     setStatus('送出中…');
-
-    const command = mode === 'cancel' ? '代取消' : '代報名';
-    const text = `${command} ${date} ${name} ${selectedGender}`;
 
     try {
       await liff.sendMessages([{ type: 'text', text }]);
@@ -178,7 +295,9 @@
     if (!liff.isInClient()) {
       setStatus('請在 LINE App 內、從聊天室的名單卡片點擊按鈕使用這個功能。', true);
       submitBtn.disabled = true;
+      return;
     }
+    if (mode === 'cancel') loadCancelChecklist();
   }).catch((err) => {
     console.error(err);
     setStatus('LIFF 初始化失敗，請確認 daibao.html 裡的 LIFF_ID 是否已正確設定。', true);
