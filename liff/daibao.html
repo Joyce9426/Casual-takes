@@ -210,7 +210,9 @@
     const ctx = liff.getContext();
     const chatId = ctx.type === 'group' ? ctx.groupId : ctx.type === 'room' ? ctx.roomId : null;
     if (!chatId) {
-      setStatus('請在聊天室的名單卡片中開啟此頁面。', true);
+      // 印出實際偵測到的 context 類型，方便排查——正常從群組的名單卡片點
+      // 進來時這裡應該要是 "group"。
+      setStatus(`請在聊天室的名單卡片中開啟此頁面。（偵測到的類型：${ctx.type || '（無）'}）`, true);
       cancelFields.innerHTML = '';
       return;
     }
