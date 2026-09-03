@@ -3,7 +3,7 @@ import { toast, confirmDialog, escapeHtml, openModal, backButtonHtml, attachBack
 import { getCurrentUser, forceLogout } from '../session.js';
 import { switchViewingAs } from '../sync.js';
 import { navigate, refreshCurrentRoute } from '../router.js';
-import { refreshTopbar, renderViewingAsBanner } from '../topbar.js';
+import { refreshTopbar } from '../topbar.js';
 
 function fmtWhen(ms) {
   if (!ms) return '';
@@ -118,7 +118,6 @@ export async function renderAdminUsers(root) {
           return;
         }
         toast(`已切換檢視成「${username}」`);
-        await renderViewingAsBanner();
         await refreshTopbar();
         navigate('/dashboard');
         await refreshCurrentRoute();
