@@ -148,7 +148,11 @@
       const qIndex = state.indexOf('?');
       if (qIndex >= 0) params = new URLSearchParams(state.slice(qIndex + 1));
     }
-    return { date: params.get('date'), mode: params.get('mode') === 'cancel' ? 'cancel' : 'register' };
+    return {
+      date: params.get('date'),
+      sid: params.get('sid'),
+      mode: params.get('mode') === 'cancel' ? 'cancel' : 'register',
+    };
   }
 
   function formatDateLabel(dateStr) {
@@ -174,7 +178,7 @@
   });
   nameInput.addEventListener('input', updateRegisterSubmitState);
 
-  const { date, mode } = readParams();
+  const { date, sid, mode } = readParams();
 
   function renderCancelChecklist(items, myUserId) {
     cancelItems = items;
@@ -239,7 +243,8 @@
       return;
     }
     try {
-      const res = await fetch(`${RELAY_BASE_URL.replace(/\/$/, '')}/line/cancelable?date=${encodeURIComponent(date)}&chatId=${encodeURIComponent(chatId)}&lineUserId=${encodeURIComponent(myUserId)}`);
+      const sidParam = sid ? `&sessionId=${encodeURIComponent(sid)}` : '';
+      const res = await fetch(`${RELAY_BASE_URL.replace(/\/$/, '')}/line/cancelable?date=${encodeURIComponent(date)}&chatId=${encodeURIComponent(chatId)}&lineUserId=${encodeURIComponent(myUserId)}${sidParam}`);
       const data = await res.json();
       if (!res.ok) {
         setStatus(data.error || '載入失敗，請稍後再試。', true);
@@ -277,6 +282,10 @@
     e.preventDefault();
     if (!date) return;
 
+    // 帶著 @場次ID 前 8 碼，讓機器人能精準指定是這張卡片當初顯示的那一場，
+    // 不用再靠日期反查（同一天有兩場以上時也不會搞混）。
+    const dateToken = sid ? `${date}@${sid.slice(0, 8)}` : date;
+
     let text;
     if (mode === 'cancel') {
       const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"]:checked'))
@@ -284,11 +293,11 @@
         .filter(Boolean);
       if (!checked.length) return;
       const entries = checked.map((item) => `${item.name}（${item.gender}）#${item.id.slice(0, 8)}`).join('、');
-      text = `代取消 ${date} ${entries}`;
+      text = `代取消 ${dateToken} ${entries}`;
     } else {
       const name = nameInput.value.trim();
       if (!name || !selectedGender) return;
-      text = `代報名 ${date} ${name} ${selectedGender}`;
+      text = `代報名 ${dateToken} ${name} ${selectedGender}`;
     }
 
     submitBtn.disabled = true;
