@@ -296,8 +296,7 @@
 
     try {
       await liff.sendMessages([{ type: 'text', text }]);
-      setStatus('已送出，請回到聊天室查看結果。');
-      setTimeout(() => { try { liff.closeWindow(); } catch (e2) {} }, 600);
+      try { liff.closeWindow(); } catch (e2) {}
     } catch (err) {
       console.error(err);
       setStatus('送出失敗：請確認是從聊天室裡的名單卡片點按鈕進入這個頁面的。', true);
