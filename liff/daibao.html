@@ -97,17 +97,6 @@
   }
   .status:empty { padding: 0; margin: 0; min-height: 0; }
   .status.error { color: #B3261E; }
-  .roster-summary { margin-top: 4px; }
-  .roster-group {
-    padding: 12px 14px;
-    border: 1px solid #D5DAD8;
-    border-radius: 8px;
-    background: #fff;
-    margin-bottom: 8px;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-  .roster-group .label { font-weight: bold; margin-right: 6px; }
 </style>
 </head>
 <body>
@@ -133,22 +122,30 @@
   </form>
 
   <div id="logFields" hidden></div>
-  <div id="resultFields" hidden></div>
 
 <script>
   // 這個頁面是獨立的靜態頁面，跟 PWA 主體（登入、雲端同步）完全無關。
   //
-  // 代報名／代取消：送出時直接呼叫 relay Worker 的 POST /line/daibao-register
-  // 或 /line/daibao-cancel，結果只顯示在這個頁面裡——**不會**送出任何訊息
-  // 回聊天室（不用 liff.sendMessages()）。下次有人查 #日期 或 $日期 才會
-  // 看到更新後的名單。這兩支 API 都需要知道「你是誰」（lineUserId），來自
-  // liff.getDecodedIDToken()，所以 LIFF app 的 Scope 一定要有勾選
-  // `openid`（`chat_message.write` 已經用不到了，可以不用勾）。
+  // 代報名／代取消分兩步，各司其職：
+  // 1. 送出時先直接呼叫 relay Worker 的 POST /line/daibao-register 或
+  //    /line/daibao-cancel 實際完成報名/取消，馬上拿到真正的成功/失敗結
+  //    果顯示在這個頁面裡（不用等聊天室）。
+  // 2. 只有「成功」時，才會額外用 liff.sendMessages() 把一句純查詢指令
+  //    （「#日期@場次ID」）用使用者身分貼進聊天室——這句指令本身不會再
+  //    觸發一次報名/取消（第 1 步已經做完了），機器人收到後只是重新顯示
+  //    一次這場的最新名單，但因為是透過「使用者送出訊息」這個 LINE 平台
+  //    事件觸發，機器人才能用免費的 Reply API 回覆（不佔用 Push 次數限
+  //    制）。失敗的話完全不會執行這一步，聊天室不會有任何動靜。
+  // 這是刻意的折衷：LIFF 網頁的表單送出本身不會觸發任何 LINE 平台事件、
+  // 換不到 replyToken，「完全不留下任何訊息」跟「免費用 Reply 通知聊天
+  // 室」沒辦法同時做到，只能二選一（詳見 relay/README.md 的說明）。
+  //
   // 代取消的勾選清單另外呼叫 GET /line/cancelable 查「這個 LINE 使用者在
-  // 這場次可以取消的人」（自己＋自己代報名的人）。
+  // 這場次可以取消的人」（自己＋自己代報名的人）——這支 GET API 只是給頁
+  // 面顯示清單用，真正「能不能取消」的權限判斷是在上面第 1 步的 API 裡。
   //
   // 記錄：純唯讀顯示，呼叫 GET /line/session-log 拿這個場次的操作歷史直接
-  // 畫出來，一樣不會送出任何訊息回聊天室。
+  // 畫出來，不會呼叫 liff.sendMessages()、不會送出任何訊息回聊天室。
   //
   // 部署前請把下面兩個值改成你自己的設定：
   // - LIFF_ID：LINE Developers Console 建立 LIFF app 拿到的 ID
@@ -168,7 +165,6 @@
   const registerFields = $('registerFields');
   const cancelFields = $('cancelFields');
   const logFields = $('logFields');
-  const resultFields = $('resultFields');
   const nameInput = $('name');
   const submitBtn = $('submitBtn');
   const statusEl = $('status');
@@ -251,24 +247,6 @@
     const div = document.createElement('div');
     div.textContent = String(str ?? '');
     return div.innerHTML;
-  }
-
-  // 代報名/代取消成功後顯示的最新名單摘要——取代原本「報名成功」這種純
-  // 文字訊息，直接讓人看到結果，不用再回去聊天室查一次。
-  function renderRosterSummary(roster) {
-    if (!roster) { resultFields.innerHTML = ''; return; }
-    const groups = [
-      ['女', roster.female],
-      ['男', roster.male],
-      ['候補', roster.waitlist],
-    ].filter(([, names]) => names && names.length);
-    if (!groups.length) {
-      resultFields.innerHTML = '<p class="empty-note">目前這場次還沒有人。</p>';
-      return;
-    }
-    resultFields.innerHTML = '<div class="roster-summary">' + groups.map(([label, names]) => `
-      <div class="roster-group"><span class="label">${label}（${names.length}）</span>${escapeHtml(names.join('、'))}</div>
-    `).join('') + '</div>';
   }
 
   function formatLogTime(ts) {
@@ -384,9 +362,9 @@
     subtitle.textContent = `幫別人報名 ${formatDateLabel(date)} 的場次`;
   }
 
-  // sid（場次 ID）現在是代報名/代取消直接呼叫 API 的必要參數，不是可有可
-  // 無的提示了——沒有的話（例如舊卡片的按鈕網址還沒帶 sid）就先擋下來，
-  // 不要讓表單看起來能填、送出卻一定失敗。
+  // sid（場次 ID）是直接呼叫 API 的必要參數，不是可有可無的提示了——沒有
+  // 的話（例如舊卡片的按鈕網址還沒帶 sid）就先擋下來，不要讓表單看起來能
+  // 填、送出卻一定失敗。
   if (mode !== 'log' && (!date || !sid)) {
     setStatus('缺少場次資訊，請重新從名單卡片點擊按鈕進入。', true);
     submitBtn.disabled = true;
@@ -410,9 +388,20 @@
     return data;
   }
 
-  // 代報名/代取消現在是直接呼叫 relay 的 API，不會再用 liff.sendMessages()
-  // 把訊息貼進聊天室——結果只顯示在這個頁面裡，群組/聊天室完全不會跳出任
-  // 何訊息。下次有人查 #日期 或 $日期 才會看到更新後的名單。
+  // 只有在報名/取消真的成功之後才會呼叫——把「#日期@場次ID」這句純查詢
+  // 指令用使用者身分貼進聊天室，機器人收到後只是重新顯示一次最新名單
+  // （不會再觸發一次報名/取消），但因為是透過使用者送出訊息這個 LINE 平
+  // 台事件觸發，機器人才能用免費的 Reply 回覆，不用 Push。這裡刻意不讓
+  // 失敗擋住已經成功的操作，單純記個錯誤log。
+  async function notifyChatWithRoster() {
+    const hint = sid ? `@${sid.slice(0, 8)}` : '';
+    try {
+      await liff.sendMessages([{ type: 'text', text: `#${date}${hint}` }]);
+    } catch (err) {
+      console.error('通知聊天室失敗（不影響報名/取消本身已經成功）：', err);
+    }
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!sid) return;
@@ -426,11 +415,9 @@
     submitBtn.disabled = true;
     setStatus('送出中…');
 
-    // 成功時不顯示「報名成功」這種文字，直接把表單換成最新名單；失敗原因
-    // （包含勾選多人時部分失敗的那幾個）還是要顯示出來。
     try {
       let success = false;
-      let roster = null;
+      let successText = '';
       let failedText = '';
 
       if (mode === 'cancel') {
@@ -446,8 +433,8 @@
         const canceled = data.canceled || [];
         const failed = data.failed || [];
         success = canceled.length > 0;
+        if (success) successText = `已取消：${canceled.join('、')}`;
         if (failed.length) failedText = `⚠️ 未取消：${failed.join('、')}`;
-        if (success) roster = data.roster;
       } else {
         const name = nameInput.value.trim();
         if (!name || !selectedGender) { submitBtn.disabled = false; setStatus(''); return; }
@@ -458,15 +445,14 @@
           gender: selectedGender,
         });
         success = Boolean(data.added);
-        if (!success) failedText = data.message || '⚠️ 已經在本場次名單中';
-        if (success) roster = data.roster;
+        if (success) successText = `${name}（${selectedGender}）報名成功`;
+        else failedText = data.message || '⚠️ 已經在本場次名單中';
       }
 
       if (success) {
-        setStatus(failedText, Boolean(failedText));
-        form.hidden = true;
-        renderRosterSummary(roster);
-        resultFields.hidden = false;
+        setStatus([successText, failedText].filter(Boolean).join('\n'));
+        await notifyChatWithRoster();
+        setTimeout(() => { try { liff.closeWindow(); } catch (e2) {} }, 900);
       } else {
         setStatus(failedText, true);
         submitBtn.disabled = false;
