@@ -112,22 +112,17 @@
 <script>
   // 這個頁面是獨立的靜態頁面，跟 PWA 主體（登入、雲端同步）完全無關。
   //
-  // 代報名：送出表單時用 liff.sendMessages() 把「代報名 日期 姓名 性別」
-  // 這句文字用「使用者身分」送進原本的聊天室，機器人當成一般文字訊息處理
-  // （跟直接手動打字一樣），這樣才能用 Reply API 回覆結果，不用 Push
-  // （LINE Push 有次數限制，Reply 沒有）。這一步完全不需要呼叫 relay
-  // Worker 的任何 API。
+  // 代報名／代取消：送出時直接呼叫 relay Worker 的 POST /line/daibao-register
+  // 或 /line/daibao-cancel，結果只顯示在這個頁面裡——**不會**送出任何訊息
+  // 回聊天室（不用 liff.sendMessages()）。下次有人查 #日期 或 $日期 才會
+  // 看到更新後的名單。這兩支 API 都需要知道「你是誰」（lineUserId），來自
+  // liff.getDecodedIDToken()，所以 LIFF app 的 Scope 一定要有勾選
+  // `openid`（`chat_message.write` 已經用不到了，可以不用勾）。
+  // 代取消的勾選清單另外呼叫 GET /line/cancelable 查「這個 LINE 使用者在
+  // 這場次可以取消的人」（自己＋自己代報名的人）。
   //
-  // 代取消：多了一步——先呼叫 relay Worker 的 GET /line/cancelable，查出
-  // 「這個 LINE 使用者在這場次可以取消的人」（自己＋自己代報名的人），畫成
-  // 勾選清單；勾選送出時，一樣是組成一句「代取消 ...」文字用
-  // liff.sendMessages() 送進聊天室，走跟代報名一樣的 Reply 流程。這支
-  // GET API 只是給頁面顯示清單用，真正「能不能取消」的權限判斷還是在
-  // Worker 收到 webhook 訊息時、用 LINE 保證正確的使用者身分重新檢查一次。
-  //
-  // 記錄：純唯讀顯示，呼叫 relay Worker 的 GET /line/session-log 拿這個
-  // 場次的操作歷史直接畫出來，不會呼叫 liff.sendMessages()、不會送出任何
-  // 訊息回聊天室，也不需要知道是誰在看（不用 openid）。
+  // 記錄：純唯讀顯示，呼叫 GET /line/session-log 拿這個場次的操作歷史直接
+  // 畫出來，一樣不會送出任何訊息回聊天室。
   //
   // 部署前請把下面兩個值改成你自己的設定：
   // - LIFF_ID：LINE Developers Console 建立 LIFF app 拿到的 ID
@@ -281,10 +276,7 @@
     setStatus('載入可取消名單中…');
     const ctx = liff.getContext();
 
-    let myUserId = null;
-    try {
-      myUserId = liff.getDecodedIDToken()?.sub || null;
-    } catch (e) { /* ignore */ }
+    const myUserId = getMyUserId();
     if (!myUserId) {
       setStatus('無法取得您的身分資訊，請確認 LIFF app 的 Scope 有勾選 openid。', true);
       cancelFields.innerHTML = '';
@@ -329,6 +321,7 @@
   }
 
   if (mode === 'cancel') {
+    document.title = '取消';
     heading.textContent = '代取消報名';
     subtitle.textContent = `勾選要取消 ${formatDateLabel(date)} 場次的人（只會列出你自己或你代報名的人）`;
     form.classList.add('cancel-mode');
@@ -336,52 +329,98 @@
     cancelFields.hidden = false;
     submitBtn.textContent = '取消報名';
   } else if (mode === 'log') {
+    document.title = '記錄';
     heading.textContent = '操作紀錄';
     subtitle.textContent = `${formatDateLabel(date)} 場次的報名/取消紀錄`;
     form.hidden = true;
     logFields.hidden = false;
   } else {
+    document.title = '代報名';
     subtitle.textContent = `幫別人報名 ${formatDateLabel(date)} 的場次`;
   }
 
-  if (mode !== 'log' && !date) {
-    setStatus('缺少場次日期，請重新從名單卡片點擊按鈕進入。', true);
+  // sid（場次 ID）現在是代報名/代取消直接呼叫 API 的必要參數，不是可有可
+  // 無的提示了——沒有的話（例如舊卡片的按鈕網址還沒帶 sid）就先擋下來，
+  // 不要讓表單看起來能填、送出卻一定失敗。
+  if (mode !== 'log' && (!date || !sid)) {
+    setStatus('缺少場次資訊，請重新從名單卡片點擊按鈕進入。', true);
     submitBtn.disabled = true;
     nameInput.disabled = true;
     genderBtns.forEach((b) => (b.disabled = true));
   }
 
+  function getMyUserId() {
+    try { return liff.getDecodedIDToken()?.sub || null; } catch (e) { return null; }
+  }
+
+  async function apiPost(path, payload) {
+    const res = await fetch(`${RELAY_BASE_URL.replace(/\/$/, '')}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* ignore */ }
+    if (!res.ok) throw new Error(data.error || `請求失敗（HTTP ${res.status}）`);
+    return data;
+  }
+
+  // 代報名/代取消現在是直接呼叫 relay 的 API，不會再用 liff.sendMessages()
+  // 把訊息貼進聊天室——結果只顯示在這個頁面裡，群組/聊天室完全不會跳出任
+  // 何訊息。下次有人查 #日期 或 $日期 才會看到更新後的名單。
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!date) return;
+    if (!sid) return;
 
-    // 帶著 @場次ID 前 8 碼，讓機器人能精準指定是這張卡片當初顯示的那一場，
-    // 不用再靠日期反查（同一天有兩場以上時也不會搞混）。
-    const dateToken = sid ? `${date}@${sid.slice(0, 8)}` : date;
-
-    let text;
-    if (mode === 'cancel') {
-      const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"]:checked'))
-        .map((cb) => cancelItems[Number(cb.dataset.index)])
-        .filter(Boolean);
-      if (!checked.length) return;
-      const entries = checked.map((item) => `${item.name}（${item.gender}）#${item.id.slice(0, 8)}`).join('、');
-      text = `代取消 ${dateToken} ${entries}`;
-    } else {
-      const name = nameInput.value.trim();
-      if (!name || !selectedGender) return;
-      text = `代報名 ${dateToken} ${name} ${selectedGender}`;
+    const myUserId = getMyUserId();
+    if (!myUserId) {
+      setStatus('無法取得您的身分資訊，請確認 LIFF app 的 Scope 有勾選 openid。', true);
+      return;
     }
 
     submitBtn.disabled = true;
     setStatus('送出中…');
 
     try {
-      await liff.sendMessages([{ type: 'text', text }]);
-      try { liff.closeWindow(); } catch (e2) {}
+      let allOk;
+      if (mode === 'cancel') {
+        const checked = Array.from(cancelFields.querySelectorAll('input[type="checkbox"]:checked'))
+          .map((cb) => cancelItems[Number(cb.dataset.index)])
+          .filter(Boolean);
+        if (!checked.length) { submitBtn.disabled = false; return; }
+        const data = await apiPost('/line/daibao-cancel', {
+          sessionId: sid,
+          lineUserId: myUserId,
+          items: checked.map((item) => ({ id: item.id, name: item.name, gender: item.gender })),
+        });
+        const canceled = data.canceled || [];
+        const failed = data.failed || [];
+        allOk = canceled.length > 0 && failed.length === 0;
+        const lines = [];
+        if (canceled.length) lines.push(`已取消：${canceled.join('、')}`);
+        if (failed.length) lines.push(`未取消：${failed.join('、')}`);
+        setStatus(lines.join('\n') || '沒有任何變更', !allOk);
+      } else {
+        const name = nameInput.value.trim();
+        if (!name || !selectedGender) { submitBtn.disabled = false; return; }
+        const data = await apiPost('/line/daibao-register', {
+          sessionId: sid,
+          lineUserId: myUserId,
+          name,
+          gender: selectedGender,
+        });
+        allOk = Boolean(data.added);
+        setStatus(data.message || (allOk ? '報名成功' : '已經在名單中'), !allOk);
+      }
+
+      if (allOk) {
+        setTimeout(() => { try { liff.closeWindow(); } catch (e2) {} }, 1200);
+      } else {
+        submitBtn.disabled = false;
+      }
     } catch (err) {
       console.error(err);
-      setStatus('送出失敗：請確認是從聊天室裡的名單卡片點按鈕進入這個頁面的。', true);
+      setStatus(err.message || '送出失敗，請稍後再試。', true);
       submitBtn.disabled = false;
     }
   });
