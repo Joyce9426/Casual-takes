@@ -202,8 +202,9 @@ export async function renderMembers(root) {
     return `
       <div class="list-row">
         <div class="list-row-main">
-          <div class="list-row-title" data-open-history="${m.id}" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <div class="list-row-title" data-open-history="${m.id}" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">
             ${escapeHtml(m.name)}
+            ${m.isAdmin ? `<span style="font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:20px;background:var(--crimson-tint);color:var(--crimson);">管理員</span>` : ''}
             <span style="color:var(--ink-faint);display:inline-flex;">${CHEVRON_RIGHT_SVG}</span>
           </div>
           ${m.note ? `<div class="list-row-meta">${escapeHtml(m.note)}</div>` : ''}
@@ -322,6 +323,12 @@ export async function renderMembers(root) {
           <label>備註（選填）</label>
           <input type="text" id="m-note" value="${isEdit ? escapeHtml(existing.note || '') : ''}" placeholder="聯絡方式等">
         </div>
+        ${isEdit ? `
+        <label style="display:flex;align-items:center;gap:14px;margin-top:4px;">
+          <input type="checkbox" id="m-is-admin" ${existing.isAdmin ? 'checked' : ''}>
+          <span class="small">設為管理員（可在 LINE 用「代取消」取消這場所有人的報名，不限自己代報的人）</span>
+        </label>
+        ` : ''}
       `,
       onMount: (panel) => {
         panel.querySelectorAll('#m-gender-group .radio-chip').forEach((chip) => {
@@ -344,7 +351,8 @@ export async function renderMembers(root) {
             const note = panel.querySelector('#m-note').value.trim();
 
             if (isEdit) {
-              const obj = { ...existing, name: rawName, gender, note };
+              const isAdmin = panel.querySelector('#m-is-admin')?.checked || false;
+              const obj = { ...existing, name: rawName, gender, note, isAdmin };
               await put('members', obj);
               members = members.map((x) => (x.id === obj.id ? obj : x));
               members.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));

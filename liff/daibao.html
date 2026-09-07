@@ -38,6 +38,7 @@
   .gender-input-label.male { color: #4A90E2; }
   .gender-input-label.female { color: #E24A8E; }
   .hint-note { font-size: 12px; color: #9D9D9D; margin: 10px 2px 0; }
+  .hint-note.admin-hint { color: #B3261E; margin: 0 2px 12px; }
   .checklist { margin-top: 4px; }
   .check-item {
     display: flex;
@@ -230,14 +231,14 @@
 
   const { date, sid, mode } = readParams();
 
-  function renderCancelChecklist(items) {
+  function renderCancelChecklist(items, isAdmin) {
     cancelItems = items;
     if (!items.length) {
       cancelFields.innerHTML = '<p class="empty-note">目前沒有您可以取消的報名</p>';
       submitBtn.disabled = true;
       return;
     }
-    cancelFields.innerHTML = `
+    cancelFields.innerHTML = (isAdmin ? '<p class="hint-note admin-hint">管理員模式：可以取消這場所有人的報名，請小心操作</p>' : '') + `
       <label class="check-item check-item-all">
         <input type="checkbox" id="selectAllCheckbox" />
         <span class="who">全選</span>
@@ -245,7 +246,7 @@
     ` + items.map((item, i) => `
       <label class="check-item">
         <input type="checkbox" data-index="${i}" />
-        <span class="who">${escapeHtml(item.name)}（${item.gender}）${item.registeredForSelf ? '<span class="tag">本人</span>' : ''}</span>
+        <span class="who">${escapeHtml(item.name)}（${item.gender}）${item.registeredForSelf ? '<span class="tag">本人</span>' : (item.registeredByLabel ? `<span class="tag">${escapeHtml(item.registeredByLabel)}代報</span>` : '')}</span>
       </label>
     `).join('');
 
@@ -356,7 +357,7 @@
         return;
       }
       setStatus('');
-      renderCancelChecklist(data.items || []);
+      renderCancelChecklist(data.items || [], Boolean(data.isAdmin));
     } catch (err) {
       console.error(err);
       setStatus('載入失敗，請確認網路連線。', true);
