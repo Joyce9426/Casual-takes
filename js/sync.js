@@ -22,7 +22,7 @@ import { api, ApiError } from './api.js';
 import { isLoggedIn, getViewingAs, setViewingAs, forceLogout } from './session.js';
 
 // These stores sync wholesale — every record, every field.
-const SYNCED_STORES = ['seasons', 'members', 'seasonPasses', 'sessions', 'sessionRosters'];
+const SYNCED_STORES = ['seasons', 'members', 'seasonPasses', 'sessions', 'sessionRosters', 'sessionGroupings'];
 
 // 'settings' 另外處理（見 collectDirtyChanges/pullChanges）：只有白名單裡
 // 這幾個非機密欄位（常用聊天室、繳費方式）會同步，而且每個欄位各自用自己

@@ -1,6 +1,6 @@
 // ---------- IndexedDB wrapper ----------
 const DB_NAME = 'sunday-roster-m-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -32,6 +32,10 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
+      }
+      // 一個場次最多一筆（id 直接用 sessionId），重新分組就是覆寫同一筆。
+      if (!db.objectStoreNames.contains('sessionGroupings')) {
+        db.createObjectStore('sessionGroupings', { keyPath: 'id' });
       }
     };
     req.onsuccess = (e) => resolve(e.target.result);
@@ -184,7 +188,7 @@ export async function clearStore(store) {
   });
 }
 
-export const STORES = ['seasons', 'members', 'seasonPasses', 'sessions', 'sessionRosters', 'settings'];
+export const STORES = ['seasons', 'members', 'seasonPasses', 'sessions', 'sessionRosters', 'sessionGroupings', 'settings'];
 
 // 登入、登出、admin 切換「檢視成某個使用者」時呼叫：把本機快取整個清空，
 // 之後由 sync.js 從伺服器重新拉一份該身分的資料下來。故意不呼叫

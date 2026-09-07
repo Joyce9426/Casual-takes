@@ -5,6 +5,7 @@ import { navigate } from '../router.js';
 import { computeSessionStats, seasonPassFeeOf, buildSeasonPassPaidMap } from '../calc.js';
 import { buildRosterFlexMessage, sendToLineRelay } from '../lineShare.js';
 import { candidatePickerFieldHtml, bindCandidatePicker } from '../sessionShared.js';
+import { renderGroupingTab } from './sessionGrouping.js';
 
 export async function renderSessionDetail(root, seasonId, sessionId) {
   const season = await getById('seasons', seasonId);
@@ -53,6 +54,7 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
       <div class="subtabs">
         <button data-tab="roster" class="${activeTab === 'roster' ? 'active' : ''}">人員名單</button>
         <button data-tab="seasonpass" class="${activeTab === 'seasonpass' ? 'active' : ''}">季打管理</button>
+        <button data-tab="grouping" class="${activeTab === 'grouping' ? 'active' : ''}">分組對戰</button>
       </div>
 
       <div id="tab-body"></div>
@@ -67,7 +69,19 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
 
     const tabBody = root.querySelector('#tab-body');
     if (activeTab === 'roster') drawRosterTab(tabBody, stats);
-    else drawSeasonPassTab(tabBody);
+    else if (activeTab === 'seasonpass') drawSeasonPassTab(tabBody);
+    else renderGroupingTab(tabBody, { sessionId, membersById, attendingMemberIds: computeAttendingMemberIds() });
+  }
+
+  // 分組對戰用的出席名單：跟「人員名單」分頁同一套邏輯（季打出席中 + 臨
+  // 打，不含候補、不含請假），每次進分頁都重新算一次，反映名單的最新狀態。
+  function computeAttendingMemberIds() {
+    const leaveMemberIds = new Set(
+      rosters.filter((r) => r.sourceType === 'seasonPass' && r.attendance === '請假').map((r) => r.memberId)
+    );
+    const seasonPassAttendingMemberIds = seasonPasses.map((sp) => sp.memberId).filter((id) => !leaveMemberIds.has(id));
+    const casualMemberIds = rosters.filter((r) => r.sourceType === 'casual').map((r) => r.memberId);
+    return [...new Set([...seasonPassAttendingMemberIds, ...casualMemberIds])];
   }
 
   // ---------------- 人員名單 tab ----------------

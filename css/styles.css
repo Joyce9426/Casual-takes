@@ -589,6 +589,65 @@ select.inline-select {
 }
 .batch-bar strong { color: var(--court-blue); }
 
+/* ---------- 分組 / 對戰表 ---------- */
+.chip-pool { display: flex; flex-wrap: wrap; gap: 6px; }
+.member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.member-chip:active { transform: translateY(1px); }
+.member-chip .chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 2px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-size: .7rem;
+  line-height: 1;
+}
+.member-chip .chip-remove:hover { color: var(--crimson); }
+.group-card { border: 2px solid transparent; cursor: pointer; }
+.group-card-active { border-color: var(--court-green); }
+/* 一列固定三組，超過三組自動換列；列數多到超出高度時垂直捲動，並隱藏
+   捲軸（Chrome/Safari 用 ::-webkit-scrollbar，Firefox 用 scrollbar-width）。 */
+.group-scroll {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  padding-bottom: 4px;
+  margin-bottom: 14px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.group-scroll::-webkit-scrollbar { display: none; }
+.group-scroll .group-card {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.round-block { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.round-block:last-child { border-bottom: none; }
+.round-block-title { font-size: .78rem; font-weight: 700; color: var(--court-green); margin-bottom: 6px; }
+.match-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: .84rem; flex-wrap: wrap; }
+.match-row .vs { color: var(--ink-faint); font-size: .72rem; font-weight: 700; }
+.team-names { font-weight: 600; display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.team-group-seg { white-space: nowrap; }
+.team-gender-summary { color: var(--ink-faint); font-size: .72rem; font-weight: 500; white-space: nowrap; }
+
 /* ---------- Tabs within a page ---------- */
 .subtabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .subtabs button {
