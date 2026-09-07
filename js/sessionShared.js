@@ -256,7 +256,7 @@ export function bindCandidatePicker(panel, idPrefix, candidates, selectedIds, es
   const searchEl = panel.querySelector(`#${idPrefix}-search`);
 
   function renderList(query) {
-    const filtered = query ? candidates.filter((m) => m.name.includes(query)) : candidates;
+    const filtered = query ? candidates.filter((m) => m.name.toLowerCase().includes(query.toLowerCase())) : candidates;
     if (filtered.length === 0) {
       listEl.innerHTML = `<div class="small text-faint" style="padding:8px;">${candidates.length === 0 ? '沒有可選擇的人員' : '找不到符合的人員'}</div>`;
       return;

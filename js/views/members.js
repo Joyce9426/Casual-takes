@@ -58,7 +58,8 @@ export async function renderMembers(root) {
 
   function matchQuery(m) {
     if (!query) return true;
-    return m.name.includes(query) || (m.note || '').includes(query);
+    const q = query.toLowerCase();
+    return m.name.toLowerCase().includes(q) || (m.note || '').toLowerCase().includes(q);
   }
 
   function draw() {
