@@ -17,6 +17,12 @@
   --purple-tint: #EDE7F5;
   --teal: #0E7C7B;
   --teal-tint: #DFF3F2;
+  --orange: #B5580A;
+  --orange-tint: #FAEBD8;
+  --pink: #B23570;
+  --pink-tint: #FAE6EE;
+  --lime: #6B7A12;
+  --lime-tint: #EFF3DA;
   --bg: #F3F6F4;
   --surface: #FFFFFF;
   --surface-sunken: #ECF1EE;
@@ -663,15 +669,15 @@ select.inline-select {
 .round-block { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .round-block:last-child { border-bottom: none; }
 .round-block-title { font-size: .78rem; font-weight: 700; color: var(--court-green); margin-bottom: 8px; }
-/* 需求 3：對戰的兩隊改成上下堆疊顯示（每個小組各佔一行）。
-   需求 5（比分輸入對齊調整）：改成兩欄式格線——左欄是隊伍資訊、右欄是
-   比分輸入，一列一列對齊，這樣「比分輸入框」永遠跟「這一隊的區塊」同一
-   個格線列，垂直置中；就算隊伍區塊因為多個小組而變兩行，比分框也會自動
-   置中對齊那一整行的高度，不會偏上或偏下。中間 vs 那一列，兩欄都放
-   「vs」，比分欄不會留空白。 */
+/* 需求：對戰的兩隊改成上下堆疊顯示（每個小組各佔一行），男女人數合併回
+   跟色塊同一個儲存格（同一排），比分輸入框對齊的是「色塊＋男女人數」整
+   排的高度。三排格線：[A隊(含男女人數) | 比分A]、[vs | ：]、
+   [B隊(含男女人數) | 比分B]。「：」是否精準置中在兩個比分正中間，只取
+   決於第一排、第三排的高度是否相等（同一輪兩隊通常人數一樣、高度相
+   近），跟中間 vs 那排本身多高無關。 */
 .match-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px 10px;
   padding: 8px 0;
@@ -681,24 +687,34 @@ select.inline-select {
 .team-block { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .match-vs { color: var(--ink-faint); font-size: .72rem; font-weight: 700; justify-self: start; }
 .match-row .score-input { justify-self: end; }
-/* 比分欄中間放的是「:」不是「vs」，跟兩個比分輸入框同一欄、置中對齊，
-   看起來像「比分／:／比分」上下排成一組計分板。 */
 .score-vs-divider { color: var(--ink-soft); font-size: .9rem; font-weight: 700; justify-self: end; text-align: center; width: 44px; }
 /* 需求 3：對戰表裡每個小組區段各自用不同底色的匡區隔，同一組在整份對戰
-   表裡（不同輪次、對戰或輪休）顏色都固定一致，方便一眼認出。 */
+   表裡（不同輪次、對戰或輪休）顏色都固定一致，方便一眼認出。
+   最大寬度（不是固定寬度）：底色跟著內容縮小，沒有名字的地方不會被拉出
+   底色；人數多（例如 6 人一組）一行放不下時才換行顯示，不會把比分欄擠出
+   去、造成版面跑掉。組別字母固定在左邊，名單換成兩行時，字母仍然垂直
+   置中，不會偏到第一行。 */
 .team-group-seg {
-  display: inline-block;
-  white-space: nowrap;
-  padding: 3px 9px;
-  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px 9px;
+  border-radius: var(--radius-s);
   font-weight: 600;
 }
+.team-seg-label { flex-shrink: 0; font-weight: 700; }
+.team-seg-names { flex: 1; min-width: 0; white-space: normal; word-break: break-word; }
 .team-seg-0 { background: var(--court-green-tint); color: var(--court-green-dark); }
 .team-seg-1 { background: var(--court-blue-tint); color: var(--court-blue); }
 .team-seg-2 { background: var(--gold-tint); color: var(--gold); }
 .team-seg-3 { background: var(--crimson-tint); color: var(--crimson); }
 .team-seg-4 { background: var(--purple-tint); color: var(--purple); }
 .team-seg-5 { background: var(--teal-tint); color: var(--teal); }
+.team-seg-6 { background: var(--orange-tint); color: var(--orange); }
+.team-seg-7 { background: var(--pink-tint); color: var(--pink); }
+.team-seg-8 { background: var(--lime-tint); color: var(--lime); }
 .team-gender-summary { color: var(--ink-faint); font-size: .72rem; font-weight: 500; white-space: nowrap; }
 .score-input {
   width: 44px;
@@ -709,18 +725,25 @@ select.inline-select {
   text-align: center;
   font-family: var(--font-mono);
 }
-/* 輪休跟上面對戰區塊拉開一點空間，並用底色區塊區隔，一眼就能看出這是
-   「休息」而不是另一場比賽。底色刻意用不帶色相的中性灰＋虛線框，跟
-   team-seg-0~5 那幾個彩色小組色塊明顯不同，不會被誤認成又一個小組。 */
+/* 輪休跟上面對戰區塊拉開一點空間，只用虛線外匡區隔（不加底色），一眼就
+   能看出這是「休息」而不是另一場比賽，也不會跟彩色小組色塊搶視覺。 */
 .rest-row {
   margin-top: 10px;
-  padding: 7px 10px;
-  background: #E9E9E6;
+  padding: 6px 8px;
   border: 1px dashed #C7C7C2;
   border-radius: var(--radius-s);
-  font-size: .78rem;
+  font-size: .68rem;
   color: var(--ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
 }
+.rest-row-label { flex-shrink: 0; }
+/* 需求：輪休區塊的文字整體再縮小一點，常見的「每組 2 人、每人 2 個字、
+   3 組」情境才擠得進同一行，不會一組一行搬版面。只縮小輪休區塊自己
+   （用 .rest-row 限定），不影響上面對戰區塊小組色塊的大小。 */
+.rest-row .team-group-seg { padding: 2px 4px; gap: 2px; }
 /* 需求 4：輪數輸入框跟「產生對戰表」按鈕在同一列，兩邊都用同樣的
    label+control 結構讓垂直位置對齊，這裡再把控制項本身的高度強制對齊，
    避免 input 跟 button 預設高度不同造成的跑版。 */

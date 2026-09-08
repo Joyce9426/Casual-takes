@@ -1,5 +1,5 @@
 import { getById, put } from '../db.js';
-import { uid, toast, escapeHtml, confirmDialog } from '../utils.js';
+import { uid, toast, escapeHtml } from '../utils.js';
 import {
   suggestGroupCount, shuffleFill, planMatches, buildGroupRoundSchedule, shuffleGroupsOrder,
   naturalRoundsCount, computeAppearanceCounts, computeGroupScores, groupLabel,
@@ -118,23 +118,29 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
 
   // 對戰表裡每一隊（或輪休的小組）依組成的原始小組分段顯示，一個小組一
   // 行，例如「A：小王、小明」換行「B：大王、大名」，每個小組各自用不同
-  // 底色的匡區隔開；輪休的小組不需要顯示男女人數（需求 6），所以這裡多一
-  // 個 showGender 開關。
+  // 底色的匡區隔開。色塊本身用最大寬度（撐滿這一欄）而不是固定寬度——內
+  // 容不多的時候底色跟著內容縮小，人數多顯示不下才換行。男女人數另外用
+  // teamGenderLineHtml() 產生，不算在這裡面（見下方說明）。
   // team: { groupIds, memberIds }
-  function teamCompositionHtml(team, { showGender = true } = {}) {
+  function teamCompositionHtml(team) {
     if (!team) return '';
-    const segs = team.groupIds.map((gid) => {
+    return team.groupIds.map((gid) => {
       const idx = grouping.groups.findIndex((g) => g.id === gid);
       const group = grouping.groups[idx];
       const label = idx === -1 ? '?' : groupLabel(idx);
       const names = (group ? group.memberIds : []).map((id) => escapeHtml(membersById[id]?.name || '')).join('、');
-      const colorClass = `team-seg-${idx === -1 ? 0 : idx % 6}`;
-      return `<span class="team-group-seg ${colorClass}">${label}：${names}</span>`;
+      const colorClass = `team-seg-${idx === -1 ? 0 : idx % 9}`;
+      return `<span class="team-group-seg ${colorClass}"><span class="team-seg-label">${label}</span><span class="team-seg-names">${names}</span></span>`;
     }).join('');
-    if (!showGender) return segs;
+  }
+
+  // 男女人數獨立成自己的一行，不算進小組色塊的區塊裡——這樣比分輸入框
+  // 垂直置中的對齊基準只看小組色塊本身的高度，不會被這行拉走。
+  function teamGenderLineHtml(team) {
+    if (!team) return '';
     const male = team.memberIds.filter((id) => membersById[id]?.gender === '男').length;
     const female = team.memberIds.filter((id) => membersById[id]?.gender === '女').length;
-    return `${segs}<span class="team-gender-summary">（男${male}・女${female}）</span>`;
+    return `<span class="team-gender-summary">（男${male}・女${female}）</span>`;
   }
 
   function restGroupTeam(gid) {
@@ -161,7 +167,7 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
     return `
       <div class="card-title">組別總得分</div>
       <div class="stack">
-        ${entries.map(({ idx, total }) => `<div class="flex-between"><span class="team-group-seg team-seg-${idx % 6}">${groupLabel(idx)} 組</span><strong class="mono">${total}</strong></div>`).join('')}
+        ${entries.map(({ idx, total }) => `<div class="flex-between"><span class="team-group-seg team-seg-${idx % 9}">${groupLabel(idx)} 組</span><strong class="mono">${total}</strong></div>`).join('')}
       </div>
     `;
   }
@@ -187,15 +193,15 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
             <div class="round-block-title">第 ${i + 1} 輪</div>
             ${round.matches.map((m, mi) => `
               <div class="match-row">
-                <div class="team-block">${teamCompositionHtml(m.teamA)}</div>
+                <div class="team-block">${teamCompositionHtml(m.teamA)}${teamGenderLineHtml(m.teamA)}</div>
                 ${scoreInputHtml(i, mi, 'A', m.scoreA)}
                 <div class="match-vs">vs</div>
                 <div class="score-vs-divider">:</div>
-                <div class="team-block">${teamCompositionHtml(m.teamB)}</div>
+                <div class="team-block">${teamCompositionHtml(m.teamB)}${teamGenderLineHtml(m.teamB)}</div>
                 ${scoreInputHtml(i, mi, 'B', m.scoreB)}
               </div>
             `).join('')}
-            ${round.restGroupIds.length ? `<div class="rest-row">輪休：${round.restGroupIds.map((gid) => teamCompositionHtml(restGroupTeam(gid), { showGender: false })).join('　')}</div>` : ''}
+            ${round.restGroupIds.length ? `<div class="rest-row"><span class="rest-row-label">輪休：</span>${round.restGroupIds.map((gid) => teamCompositionHtml(restGroupTeam(gid))).join('')}</div>` : ''}
           </div>
         `).join('')}
         ${leftoverNames.length ? `<div class="small text-faint" style="margin-top:8px;">未能湊滿 ${grouping.groupSize} 人、未排入對戰表：${leftoverNames.map(escapeHtml).join('、')}</div>` : ''}
@@ -406,13 +412,11 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
     tabBody.querySelector('#clear-all-groups-btn').addEventListener('click', () => {
       const hasAny = grouping.groups.some((g) => g.memberIds.length > 0);
       if (!hasAny) { toast('目前沒有已分組的人'); return; }
-      confirmDialog('確定要清空所有組別的人員嗎？大家會回到未分組名單，組別本身不會被刪除。', () => {
-        grouping.groups.forEach((g) => { g.memberIds = []; });
-        clearSchedule();
-        markDirty();
-        draw();
-        toast('已清空所有組別');
-      });
+      grouping.groups.forEach((g) => { g.memberIds = []; });
+      clearSchedule();
+      markDirty();
+      draw();
+      toast('已清空所有組別');
     });
 
     const roundsInput = tabBody.querySelector('#rounds-count-input');
