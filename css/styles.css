@@ -13,6 +13,10 @@
   --female-tint: #FFE1E740;
   --crimson: #B3261E;
   --crimson-tint: #FBE6E4;
+  --purple: #6B4FA0;
+  --purple-tint: #EDE7F5;
+  --teal: #0E7C7B;
+  --teal-tint: #DFF3F2;
   --bg: #F3F6F4;
   --surface: #FFFFFF;
   --surface-sunken: #ECF1EE;
@@ -330,6 +334,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
   font-size: 1rem;
 }
 .icon-btn:hover { color: var(--court-blue); }
+.icon-btn.icon-btn-text { min-width: auto; font-size: .72rem; font-weight: 600; white-space: nowrap; }
 
 .field { margin-bottom: 12px; }
 .field label {
@@ -609,44 +614,121 @@ select.inline-select {
   border: none;
   padding: 0;
   margin-left: 2px;
-  color: var(--ink-faint);
+  color: inherit;
+  opacity: .6;
   cursor: pointer;
   font-size: .7rem;
   line-height: 1;
 }
-.member-chip .chip-remove:hover { color: var(--crimson); }
+.member-chip .chip-remove:hover { opacity: 1; color: var(--crimson); }
+/* 需求 1：不用文字標示性別，改用 chip 底色區分（跟人員名單頁男女配色一致）。 */
+.member-chip-male { background: var(--court-blue-tint); border-color: var(--court-blue); color: var(--court-blue); }
+.member-chip-female { background: var(--gold-tint); border-color: var(--gold); color: var(--gold); }
 .group-card { border: 2px solid transparent; cursor: pointer; }
 .group-card-active { border-color: var(--court-green); }
-/* 一列固定三組，超過三組自動換列；列數多到超出高度時垂直捲動，並隱藏
-   捲軸（Chrome/Safari 用 ::-webkit-scrollbar，Firefox 用 scrollbar-width）。 */
+/* 橫向自由捲動（不分頁、不吸附）：一頁直向顯示 3 組，寬度故意留一點餘裕
+   （92%），不捲動時就能看到右邊下一批的邊緣；頁與頁之間留間距。捲軸本身
+   隱藏（Chrome/Safari 用 ::-webkit-scrollbar，Firefox/Edge 用
+   scrollbar-width）。 */
 .group-scroll {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  max-height: 360px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  overscroll-behavior-y: contain;
-  padding-bottom: 4px;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
   margin-bottom: 14px;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .group-scroll::-webkit-scrollbar { display: none; }
+/* 需求 1：只有一頁（≤3 組，不需要橫向捲動）時置中顯示，不要貼左邊留一
+   截空白；超過一頁（需要捲動）維持原本靠左、露出下一頁邊緣的樣式。 */
+.group-scroll-center { justify-content: center; }
+.group-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 0 92%;
+  min-width: 0;
+}
 .group-scroll .group-card {
   min-width: 0;
   margin-bottom: 0;
 }
-.round-block { padding: 8px 0; border-bottom: 1px solid var(--line); }
+/* 需求 2：不管組內目前有幾個人，這塊區域的高度都先保留好（一行名字的高
+   度），加入/移出成員時卡片高度不會跳動。 */
+.group-scroll .chip-pool { min-height: 35px; align-content: flex-start; }
+.round-block { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .round-block:last-child { border-bottom: none; }
-.round-block-title { font-size: .78rem; font-weight: 700; color: var(--court-green); margin-bottom: 6px; }
-.match-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: .84rem; flex-wrap: wrap; }
-.match-row .vs { color: var(--ink-faint); font-size: .72rem; font-weight: 700; }
-.team-names { font-weight: 600; display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
-.team-group-seg { white-space: nowrap; }
+.round-block-title { font-size: .78rem; font-weight: 700; color: var(--court-green); margin-bottom: 8px; }
+/* 需求 3：對戰的兩隊改成上下堆疊顯示（每個小組各佔一行）。
+   需求 5（比分輸入對齊調整）：改成兩欄式格線——左欄是隊伍資訊、右欄是
+   比分輸入，一列一列對齊，這樣「比分輸入框」永遠跟「這一隊的區塊」同一
+   個格線列，垂直置中；就算隊伍區塊因為多個小組而變兩行，比分框也會自動
+   置中對齊那一整行的高度，不會偏上或偏下。中間 vs 那一列，兩欄都放
+   「vs」，比分欄不會留空白。 */
+.match-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 0;
+  font-size: .84rem;
+}
+.match-row + .match-row { border-top: 1px dashed var(--line); }
+.team-block { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.match-vs { color: var(--ink-faint); font-size: .72rem; font-weight: 700; justify-self: start; }
+.match-row .score-input { justify-self: end; }
+/* 比分欄中間放的是「:」不是「vs」，跟兩個比分輸入框同一欄、置中對齊，
+   看起來像「比分／:／比分」上下排成一組計分板。 */
+.score-vs-divider { color: var(--ink-soft); font-size: .9rem; font-weight: 700; justify-self: end; text-align: center; width: 44px; }
+/* 需求 3：對戰表裡每個小組區段各自用不同底色的匡區隔，同一組在整份對戰
+   表裡（不同輪次、對戰或輪休）顏色都固定一致，方便一眼認出。 */
+.team-group-seg {
+  display: inline-block;
+  white-space: nowrap;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.team-seg-0 { background: var(--court-green-tint); color: var(--court-green-dark); }
+.team-seg-1 { background: var(--court-blue-tint); color: var(--court-blue); }
+.team-seg-2 { background: var(--gold-tint); color: var(--gold); }
+.team-seg-3 { background: var(--crimson-tint); color: var(--crimson); }
+.team-seg-4 { background: var(--purple-tint); color: var(--purple); }
+.team-seg-5 { background: var(--teal-tint); color: var(--teal); }
 .team-gender-summary { color: var(--ink-faint); font-size: .72rem; font-weight: 500; white-space: nowrap; }
+.score-input {
+  width: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 4px 2px;
+  font-size: .85rem;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+/* 輪休跟上面對戰區塊拉開一點空間，並用底色區塊區隔，一眼就能看出這是
+   「休息」而不是另一場比賽。底色刻意用不帶色相的中性灰＋虛線框，跟
+   team-seg-0~5 那幾個彩色小組色塊明顯不同，不會被誤認成又一個小組。 */
+.rest-row {
+  margin-top: 10px;
+  padding: 7px 10px;
+  background: #E9E9E6;
+  border: 1px dashed #C7C7C2;
+  border-radius: var(--radius-s);
+  font-size: .78rem;
+  color: var(--ink-soft);
+}
+/* 需求 4：輪數輸入框跟「產生對戰表」按鈕在同一列，兩邊都用同樣的
+   label+control 結構讓垂直位置對齊，這裡再把控制項本身的高度強制對齊，
+   避免 input 跟 button 預設高度不同造成的跑版。 */
+.rounds-generate-row input,
+.rounds-generate-row button {
+  height: 42px;
+  box-sizing: border-box;
+}
 
 /* ---------- Tabs within a page ---------- */
 .subtabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }

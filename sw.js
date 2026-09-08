@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sunday-roster-m-v3';
+const CACHE_NAME = 'sunday-roster-m-v12';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -18,11 +18,13 @@ const CORE_ASSETS = [
   './js/sync.js',
   './js/sessionShared.js',
   './js/lineShare.js',
+  './js/grouping.js',
   './js/views/dashboard.js',
   './js/views/seasons.js',
   './js/views/seasonDetail.js',
   './js/views/sessions.js',
   './js/views/sessionDetail.js',
+  './js/views/sessionGrouping.js',
   './js/views/members.js',
   './js/views/settings.js',
   './js/views/adminUsers.js',

@@ -141,7 +141,15 @@ export async function pullChanges() {
     }
   }
 
-  await saveSettings({ lastPulledAt: maxUpdatedAt });
+  // 拉回來的資料本來就已經在伺服器上，不需要再推回去——把 lastPushedAt
+  // 墊高到至少等於這次拉到的最新時間，避免下一次 push 把剛拉到的資料誤判
+  // 成「本機還沒推送過的異動」又整批推回去（登入、admin 切換檢視、清快取
+  // 後最容易誤判，因為那幾種情況 lastPushedAt 會是 0 或明顯落後）。如果
+  // 本機的 lastPushedAt 本來就比這次拉到的更新（例如這次 pull 前才剛
+  // push 過某筆更新的資料），則維持原本比較新的值，不會往回倒退。
+  const latestSettings = await getSettings();
+  const nextLastPushedAt = Math.max(Number(latestSettings.lastPushedAt) || 0, maxUpdatedAt);
+  await saveSettings({ lastPulledAt: maxUpdatedAt, lastPushedAt: nextLastPushedAt });
   return { pulled: records.length };
 }
 
