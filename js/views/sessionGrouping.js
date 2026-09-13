@@ -1,5 +1,5 @@
 import { getById, put } from '../db.js';
-import { uid, toast, escapeHtml } from '../utils.js';
+import { uid, toast, escapeHtml, openModal } from '../utils.js';
 import {
   suggestGroupCount, shuffleFill, planMatches, buildGroupRoundSchedule, shuffleGroupsOrder,
   naturalRoundsCount, computeAppearanceCounts, computeGroupScores, groupLabel,
@@ -23,6 +23,10 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
   }
   let activeGroupId = null;
   let desiredRounds = null; // null＝還沒手動調整過，畫面顯示系統建議的預設輪數
+  // 抽籤模式：開啟後，點「未分組」名單裡的人名不再是「加入目前作用中組
+  // 別」，改成跳出抽籤動畫，隨機分配到一個還沒額滿的組別。已經分組好的人
+  // 在抽籤模式下點名字不處理（維持原本用組別卡片裡的 ✕ 移出）。
+  let drawMode = false;
   // 需求 2：不再每個動作都寫 IndexedDB（會連帶每次都觸發一次背景推送 API）
   // ——所有操作只改這裡的記憶體狀態，標記「有未儲存的變更」，等按下最上面
   // 的「儲存」按鈕才一次寫入、一次觸發推送。
@@ -56,6 +60,71 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
     await put('sessionGroupings', grouping);
   }
 
+  // 抽籤：只從「尚未額滿」的組別裡隨機抽一組，跳出開獎風格的動畫（字母
+  // 快速輪播、逐漸減速、最後停格放大），動畫停格的同時才真正把人分配進
+  // 抽中的組別——如果使用者在動畫跑完前就把視窗關掉，就當作沒抽過。
+  function runDraw(memberId) {
+    const candidateGroups = grouping.groups.filter((g) => g.memberIds.length < grouping.groupSize);
+    if (!candidateGroups.length) { toast('目前所有組別已滿，請先新增組別'); return; }
+    const winnerGroup = candidateGroups[Math.floor(Math.random() * candidateGroups.length)];
+    const winnerIdx = grouping.groups.findIndex((g) => g.id === winnerGroup.id);
+    const winnerLabel = groupLabel(winnerIdx);
+    const colorClass = `team-seg-${winnerIdx % 9}`;
+    const memberName = membersById[memberId]?.name || '';
+    const spinLabels = grouping.groups.map((g, i) => groupLabel(i));
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    openModal({
+      title: '抽籤',
+      bodyHtml: `
+        <div class="draw-modal">
+          <div class="draw-modal-hint">抽籤對象</div>
+          <div class="draw-modal-name">${escapeHtml(memberName)}</div>
+          <div class="draw-reel" id="draw-reel">${reducedMotion ? winnerLabel : '?'}</div>
+          <div class="draw-result" id="draw-result" hidden></div>
+          <button type="button" class="btn btn-primary btn-block" id="draw-done-btn" hidden>完成</button>
+        </div>
+      `,
+      actions: [],
+      onMount(panel, close) {
+        const reel = panel.querySelector('#draw-reel');
+        const resultEl = panel.querySelector('#draw-result');
+        const doneBtn = panel.querySelector('#draw-done-btn');
+
+        function land() {
+          reel.textContent = winnerLabel;
+          reel.classList.add(colorClass, 'draw-reel-landed');
+          resultEl.hidden = false;
+          resultEl.innerHTML = `🎉 <strong>${escapeHtml(memberName)}</strong> 抽中 <strong>${winnerLabel} 組</strong>！`;
+          doneBtn.hidden = false;
+          grouping.groups.forEach((g) => { g.memberIds = g.memberIds.filter((id) => id !== memberId); });
+          const target = grouping.groups.find((g) => g.id === winnerGroup.id);
+          if (target) target.memberIds.push(memberId);
+          clearSchedule();
+          markDirty();
+          draw();
+        }
+
+        if (reducedMotion) {
+          land();
+        } else {
+          const totalTicks = 20;
+          let tick = 0;
+          const step = () => {
+            if (!document.contains(reel)) return; // 視窗提早被關掉，不再繼續（也不分配）
+            tick++;
+            if (tick >= totalTicks) { land(); return; }
+            reel.textContent = spinLabels[Math.floor(Math.random() * spinLabels.length)];
+            setTimeout(step, 10 + (tick / totalTicks) * 55);
+          };
+          step();
+        }
+
+        doneBtn.addEventListener('click', () => close());
+      },
+    });
+  }
+
   function ensureActiveGroup() {
     if (activeGroupId && grouping.groups.some((g) => g.id === activeGroupId)) return;
     activeGroupId = grouping.groups[0]?.id || null;
@@ -67,11 +136,13 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
     return gender === '女' ? 'member-chip-female' : 'member-chip-male';
   }
 
-  // 未分組名單池用——單純點擊整個 chip 就會加入目前作用中的組別。
+  // 未分組名單池用——一般模式下單純點擊整個 chip 就會加入目前作用中的組
+  // 別；抽籤模式下改成點了跳出抽籤動畫（見 runDraw()），chip 外框改成虛
+  // 線，提示這裡的點擊意義不一樣。
   function poolChipHtml(memberId) {
     const m = membersById[memberId];
     if (!m) return '';
-    return `<button type="button" class="member-chip ${genderChipClass(m.gender)}" data-member-chip="${memberId}">${escapeHtml(m.name)}</button>`;
+    return `<button type="button" class="member-chip ${genderChipClass(m.gender)}${drawMode ? ' chip-drawable' : ''}" data-member-chip="${memberId}">${escapeHtml(m.name)}</button>`;
   }
 
   // 組別內的人員——多一個「✕」可以直接取消分組（不管目前哪一組是作用
@@ -247,6 +318,7 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
 
       <div class="card">
         <div class="card-title">未分組（${unassigned.length}）</div>
+        ${drawMode ? '<div class="small text-soft draw-mode-hint">🎲 抽籤模式：點選下方名字進行抽籤</div>' : ''}
         ${unassigned.length ? `
           <div class="roster-group-head-male" style="font-size:.72rem;font-weight:700;">男（${unassignedMale.length}）</div>
           <div class="chip-pool" style="margin-bottom:10px;">
@@ -263,6 +335,7 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
         <button class="btn btn-sm" id="shuffle-fill-btn">隨機快速分配</button>
         <button class="btn btn-sm" id="add-group-btn">＋ 新增一組</button>
         <button class="btn btn-sm" id="clear-all-groups-btn">一鍵清除</button>
+        <button class="btn btn-sm ${drawMode ? 'btn-primary' : ''}" id="draw-mode-toggle-btn">🎲 抽籤模式</button>
       </div>
 
       <div class="group-scroll ${pages.length <= 1 ? 'group-scroll-center' : ''}">
@@ -374,6 +447,13 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
       el.addEventListener('click', (e) => {
         e.stopPropagation(); // 不要連帶把作用中組別切成這個人原本所在的組別
         const memberId = el.dataset.memberChip;
+        if (drawMode) {
+          // 抽籤模式只作用在未分組的人；已分組的人點名字不處理，維持原本
+          // 用組別卡片裡的 ✕ 移出。
+          if (!unassignedMemberIds().includes(memberId)) return;
+          runDraw(memberId);
+          return;
+        }
         const activeGroup = grouping.groups.find((g) => g.id === activeGroupId);
         if (!activeGroup) { toast('請先新增一組，並點選要放入的組別'); return; }
         if (activeGroup.memberIds.includes(memberId)) return; // 已經在這一組了，不用重複處理
@@ -387,6 +467,11 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
         markDirty();
         draw();
       });
+    });
+
+    tabBody.querySelector('#draw-mode-toggle-btn').addEventListener('click', () => {
+      drawMode = !drawMode;
+      draw();
     });
 
     tabBody.querySelector('#add-group-btn').addEventListener('click', () => {

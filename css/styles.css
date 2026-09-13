@@ -753,6 +753,38 @@ select.inline-select {
   box-sizing: border-box;
 }
 
+/* ---------- 抽籤模式 ---------- */
+.chip-drawable { border-style: dashed; border-width: 2px; }
+.draw-mode-hint { margin: -4px 0 10px; }
+.draw-modal { text-align: center; padding: 4px 0 2px; }
+.draw-modal-hint { font-size: .74rem; color: var(--ink-faint); margin-bottom: 2px; }
+.draw-modal-name { font-size: 1.15rem; font-weight: 700; margin-bottom: 18px; }
+.draw-reel {
+  margin: 0 auto 18px;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  background: var(--surface-sunken);
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.draw-reel-landed { border-color: currentColor; animation: draw-pop .38s ease-out; }
+@keyframes draw-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.draw-result { font-size: 1rem; font-weight: 600; margin-bottom: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .draw-reel-landed { animation: none; }
+}
+
 /* ---------- Tabs within a page ---------- */
 .subtabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .subtabs button {
