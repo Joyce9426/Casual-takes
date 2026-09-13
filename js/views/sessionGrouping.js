@@ -332,10 +332,10 @@ export async function renderGroupingTab(tabBody, { sessionId, membersById, atten
       </div>
 
       <div class="flex gap-8" style="margin-bottom:12px;flex-wrap:wrap;">
-        <button class="btn btn-sm" id="shuffle-fill-btn">隨機快速分配</button>
-        <button class="btn btn-sm" id="add-group-btn">＋ 新增一組</button>
-        <button class="btn btn-sm" id="clear-all-groups-btn">一鍵清除</button>
-        <button class="btn btn-sm ${drawMode ? 'btn-primary' : ''}" id="draw-mode-toggle-btn">🎲 抽籤模式</button>
+        <button class="btn btn-sm ${drawMode ? 'btn-primary' : ''}" id="draw-mode-toggle-btn">🎲 抽籤</button>
+        <button class="btn btn-sm" id="shuffle-fill-btn">隨機</button>
+        <button class="btn btn-sm" id="add-group-btn">＋ 組別</button>
+        <button class="btn btn-sm" id="clear-all-groups-btn">一鍵清空</button>
       </div>
 
       <div class="group-scroll ${pages.length <= 1 ? 'group-scroll-center' : ''}">
