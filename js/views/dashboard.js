@@ -9,7 +9,7 @@ export async function renderDashboard(root) {
     root.innerHTML = `
       <div class="page-head"><h1 style="font-size:1.2rem;">總覽</h1></div>
       <div class="empty-state">
-        <div class="glyph">◈</div>
+        <div class="glyph"><img src="icons/icon.svg" alt="" width="56" height="56" style="border-radius:14px;"></div>
         <p>歡迎使用隨手場記m</p>
         <p>先建立第一個季度，開始管理你的週日場次吧</p>
       </div>
