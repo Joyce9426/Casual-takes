@@ -89,7 +89,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 2px 16px;
+  padding: 14px 16px;
   background: var(--court-green);
   color: #fff;
 }
