@@ -11,7 +11,7 @@ export function renderLoginScreen(root, onLogin) {
   root.innerHTML = `
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);">
       <div style="width:100%;max-width:320px;text-align:center;">
-        <div style="margin-bottom:8px;"><img src="icons/icon.svg" alt="" width="56" height="56" style="border-radius:14px;"></div>
+        <div style="margin-bottom:14px;"><img src="icons/icon.svg" alt="" width="96" height="96" style="border-radius:24px;"></div>
         <h1 style="font-family:var(--font-display);font-size:1.3rem;margin-bottom:4px;">隨手場記m</h1>
         <p class="small text-soft" style="margin-bottom:20px;">請登入你的帳號</p>
         <input type="text" id="login-username" placeholder="帳號" autocomplete="username"
