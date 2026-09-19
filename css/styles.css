@@ -95,6 +95,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
 }
 .topbar-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .brand-mark { display: flex; color: #fff; flex-shrink: 0; }
+.brand-mark img { display: block; width: 44px; height: 44px; }
 .brand-text { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; flex-shrink: 0; }
 .topbar-right { display: flex; align-items: center; gap: 8px; }
 .topbar-season select {
