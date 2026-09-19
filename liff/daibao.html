@@ -246,7 +246,7 @@
     ` + items.map((item, i) => `
       <label class="check-item">
         <input type="checkbox" data-index="${i}" />
-        <span class="who">${escapeHtml(item.name)}（${item.gender}）${item.registeredForSelf ? '<span class="tag">本人</span>' : (item.registeredByLabel ? `<span class="tag">${escapeHtml(item.registeredByLabel)}代報</span>` : '')}</span>
+        <span class="who">${escapeHtml(item.name)}（${item.gender}）${item.waitlisted ? '<span class="tag">候補</span>' : ''}${item.registeredForSelf ? '<span class="tag">本人</span>' : (item.registeredByLabel ? `<span class="tag">${escapeHtml(item.registeredByLabel)}代報</span>` : '')}</span>
       </label>
     `).join('');
 
