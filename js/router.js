@@ -74,7 +74,7 @@ function updateActiveTab(path) {
 
 export function startRouter() {
   window.addEventListener('hashchange', resolve);
-  resolve();
+  return resolve();
 }
 
 export function refreshCurrentRoute() {

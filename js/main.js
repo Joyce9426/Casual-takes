@@ -60,6 +60,11 @@ route('/admin/users', async () => {
   await renderAdminUsers(viewRoot);
 });
 
+// index.html 的 inline script 定義；不存在時（例如舊版快取的 HTML）就略過。
+function hideSplash() {
+  if (typeof window.__hideSplash === 'function') window.__hideSplash();
+}
+
 async function registerSW() {
   if ('serviceWorker' in navigator) {
     try {
@@ -74,7 +79,8 @@ async function startApp() {
   initAutoSync();
   await renderTopbarSeasonPicker();
   renderAccountSwitcher();
-  startRouter();
+  // 第一個畫面（本機快取資料）渲染完就收起啟動畫面，不等下面的網路同步。
+  Promise.resolve(startRouter()).finally(hideSplash);
   registerSW();
   setupSyncButton();
 
@@ -135,6 +141,7 @@ function showLoginScreen() {
 
   if (!isLoggedIn()) {
     showLoginScreen();
+    hideSplash();
     return;
   }
   startApp();
