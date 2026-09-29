@@ -845,21 +845,44 @@ select.inline-select {
 .modal-panel {
   background: var(--surface);
   width: 100%; max-width: 480px;
+  /* dvh tracks iOS Safari's collapsing toolbar / keyboard; vh is the fallback. */
   max-height: 88vh;
-  overflow-y: auto;
+  max-height: 88dvh;
+  /* Head and actions stay pinned; only .modal-body scrolls. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: var(--radius-l) var(--radius-l) 0 0;
-  padding: 20px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   animation: modal-in .18s ease-out;
+}
+@media (min-width: 640px) {
+  .modal-panel { border-radius: var(--radius-l); padding-bottom: 0; }
+}
+@keyframes modal-in { from { transform: translateY(16px); opacity:.4; } to { transform: translateY(0); opacity:1; } }
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-head h2 { font-size: 1.05rem; }
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 20px 20px;
   /* Stop over-scroll inside the modal from chaining into the page behind. */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
-@media (min-width: 640px) {
-  .modal-panel { border-radius: var(--radius-l); }
+.modal-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
 }
-@keyframes modal-in { from { transform: translateY(16px); opacity:.4; } to { transform: translateY(0); opacity:1; } }
-.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.modal-actions:empty { display: none; }
 
 /* ---------- Toast ---------- */
 .toast-root {

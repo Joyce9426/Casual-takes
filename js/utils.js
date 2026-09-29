@@ -255,7 +255,7 @@ export function openModal(opts) {
   panel.className = 'modal-panel';
   panel.innerHTML = `
     <div class="modal-head">
-      <h2 style="font-size:1.05rem;">${opts.title || ''}</h2>
+      <h2>${opts.title || ''}</h2>
       <button class="icon-btn" data-close aria-label="關閉">✕</button>
     </div>
     <div class="modal-body">${opts.bodyHtml || ''}</div>
