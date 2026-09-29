@@ -80,14 +80,14 @@ export async function renderSeasonDetail(root, seasonId) {
       </div>
 
       <div class="scoreboard">
-        <div class="scoreboard-label">季度總覽・已收 / 應收</div>
-        <div class="scoreboard-grid">
-          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.received)}</div><div class="cap">已收金額</div></div>
-          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.receivable)}</div><div class="cap">應收金額</div></div>
+        <div class="scoreboard-label">季度總覽</div>
+        <div class="scoreboard-grid scoreboard-grid-2col">
+          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.receivedTotal)}</div><div class="cap">已收總額</div></div>
+          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.seasonPassTotal)}</div><div class="cap">季打總額</div></div>
+          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.casualTotal)}</div><div class="cap">臨打總額</div></div>
           <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.expense)}</div><div class="cap">總支出</div></div>
-          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.receivedSurplus)}</div><div class="cap">已收盈餘</div></div>
-          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.receivableSurplus)}</div><div class="cap">應收盈餘</div></div>
           <div class="scoreboard-cell warn"><div class="num mono">$${fmtMoney(seasonStats.refundTotal)}</div><div class="cap">季打退款總額</div></div>
+          <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.seasonProfit)}</div><div class="cap">本季盈餘</div></div>
         </div>
       </div>
 

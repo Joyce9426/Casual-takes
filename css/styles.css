@@ -516,6 +516,14 @@ input, select, textarea {
   gap: 14px;
   position: relative;
 }
+/* Two explicit columns, filled top-to-bottom then left-to-right — used where
+   the six cells are meant to read as "left group of three / right group of
+   three" regardless of viewport width (auto-fit alone can't guarantee that). */
+.scoreboard-grid-2col {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, auto);
+  grid-auto-flow: column;
+}
 .scoreboard-cell .num {
   font-family: var(--font-mono);
   font-size: 1.5rem;

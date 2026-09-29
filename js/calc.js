@@ -90,6 +90,13 @@ export function computeSessionStats(session, rosters, seasonPassPaidByMemberId =
     if (r.paymentMethod) return sum + (Number(r.feeAmount) || 0);
     return sum;
   }, 0);
+  // Just the ad-hoc slice of seasonPassIncome — members who never prepaid the
+  // season fee but paid for this one session instead. Season-level totals
+  // (季打總額) add this to the prepaid season passes' prepaidAmount, since a
+  // prepaid member's per-session flat fee is already covered by that prepayment.
+  const seasonPassAdHocIncome = seasonPassPerSessionPaidRows
+    .filter((r) => !seasonPassPaidByMemberId[r.memberId])
+    .reduce((sum, r) => sum + (Number(r.feeAmount) || 0), 0);
 
   const byMethod = {};
   casualRows.filter(isRosterPaid).forEach((r) => {
@@ -107,6 +114,7 @@ export function computeSessionStats(session, rosters, seasonPassPaidByMemberId =
     received,
     expense,
     seasonPassIncome,
+    seasonPassAdHocIncome,
     receivableSurplus: receivable + seasonPassIncome - expense,
     receivedSurplus: received + seasonPassIncome - expense,
     byMethod,
@@ -217,7 +225,7 @@ export function computeSeasonPassSettlement(seasonPass, sessions, rosterRowsBySe
 // sessions: all sessions in season; sessionStatsById: map sessionId -> computeSessionStats result
 // seasonPasses: all SeasonPass rows for the season, each with .settlement attached
 export function computeSeasonStats(sessions, sessionStatsById, seasonPasses) {
-  let sessionsReceivable = 0, sessionsReceived = 0, sessionsExpense = 0;
+  let sessionsReceivable = 0, sessionsReceived = 0, sessionsExpense = 0, seasonPassAdHocTotal = 0;
   const byMethod = {};
 
   sessions.forEach((s) => {
@@ -226,6 +234,7 @@ export function computeSeasonStats(sessions, sessionStatsById, seasonPasses) {
     sessionsReceivable += st.receivable;
     sessionsReceived += st.received;
     sessionsExpense += st.expense;
+    seasonPassAdHocTotal += st.seasonPassAdHocIncome || 0;
     Object.entries(st.byMethod).forEach(([k, v]) => { byMethod[k] = (byMethod[k] || 0) + v; });
   });
 
@@ -247,11 +256,24 @@ export function computeSeasonStats(sessions, sessionStatsById, seasonPasses) {
   const receivable = sessionsReceivable + seasonPassPrepaidTotal;
   const received = sessionsReceived + seasonPassPaidTotal;
 
+  // 季度總覽 (seasonDetail.js) figures — 臨打總額/季打總額/已收總額/本季盈餘.
+  // casualTotal counts only paid 臨打 rows (mirrors sessionsReceived); seasonPassTotal
+  // is the prepaid season passes' prepaidAmount plus ad-hoc per-session payments from
+  // members who never prepaid — together this is "money actually collected this season".
+  const casualTotal = sessionsReceived;
+  const seasonPassTotal = seasonPassPaidTotal + seasonPassAdHocTotal;
+  const receivedTotal = casualTotal + seasonPassTotal;
+  const seasonProfit = receivedTotal - sessionsExpense - refundTotal;
+
   return {
     receivable,
     received,
     expense: sessionsExpense,
     refundTotal,
+    casualTotal,
+    seasonPassTotal,
+    receivedTotal,
+    seasonProfit,
     receivableSurplus: receivable - sessionsExpense - refundTotal,
     receivedSurplus: received - sessionsExpense - refundTotal,
     byMethod,
