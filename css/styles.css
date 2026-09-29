@@ -306,10 +306,13 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
 }
 .back-btn:active { transform: translateY(1px); }
 
-/* 場次詳細頁的上一場／下一場：刻意做成無底色、品牌綠的細箭頭，跟灰底
-   圓形的返回鍵區分開來。 */
-.session-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.session-nav-btn {
+/* 詳細頁的上一個／下一個（場次、季度）：刻意做成無底色、品牌綠的細箭頭，
+   跟灰底圓形的返回鍵區分開來。 */
+.page-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
+/* 加了箭頭後標題變窄：標題太長時用 … 截斷，不讓右側按鈕被擠到下一行。 */
+.page-head:has(.page-nav) { flex-wrap: nowrap; }
+.page-nav h1 { overflow: hidden; text-overflow: ellipsis; }
+.page-nav-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -323,8 +326,8 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
   cursor: pointer;
   flex-shrink: 0;
 }
-.session-nav-btn:active:not(:disabled) { background: var(--surface-sunken); }
-.session-nav-btn:disabled { color: var(--line); cursor: default; }
+.page-nav-btn:active:not(:disabled) { background: var(--surface-sunken); }
+.page-nav-btn:disabled { color: var(--line); cursor: default; }
 
 .btn {
   display: inline-flex;
@@ -522,6 +525,14 @@ input, select, textarea {
 .scoreboard-grid-2col {
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(3, auto);
+  grid-auto-flow: column;
+}
+/* Same column-major fill, for a 3-cell scoreboard read as "left column of two
+   / right column of one": first two cells stack in the left column, the
+   third lands at the top of the right column. */
+.scoreboard-grid-left2-right1 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, auto);
   grid-auto-flow: column;
 }
 .scoreboard-cell .num {

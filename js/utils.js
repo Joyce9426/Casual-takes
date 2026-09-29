@@ -180,7 +180,7 @@ export function resolveMembersByNames(names, gender, existingMembers) {
 // ---------- Back button ----------
 export function backButtonHtml() {
   return `<button class="back-btn" id="page-back-btn" aria-label="返回上一頁" type="button">
-    <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg viewBox="0 0 24 24" width="20" height="20"><path d="M19 12 H5 M11 6 L5 12 L11 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>`;
 }
 

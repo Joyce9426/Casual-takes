@@ -6,6 +6,7 @@ import { computeSessionStats, seasonPassFeeOf, buildSeasonPassPaidMap } from '..
 import { buildRosterFlexMessage, sendToLineRelay } from '../lineShare.js';
 import { candidatePickerFieldHtml, bindCandidatePicker } from '../sessionShared.js';
 import { renderGroupingTab } from './sessionGrouping.js';
+import { pageNavHtml, bindPageNav, tabFromUrl, replaceTabInUrl } from '../pageNav.js';
 
 export async function renderSessionDetail(root, seasonId, sessionId) {
   const season = await getById('seasons', seasonId);
@@ -25,10 +26,11 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
   const prevSession = currentIndex > 0 ? seasonSessions[currentIndex - 1] : null;
   const nextSession = currentIndex >= 0 && currentIndex < seasonSessions.length - 1 ? seasonSessions[currentIndex + 1] : null;
 
+  // 目前頁面的路徑（可能是 /sessions/:id 或 /seasons/:sid/sessions/:id）。
+  const pagePath = window.location.hash.split('?')[0].slice(1);
+
   // 切換場次時會把目前的分頁帶在網址 ?tab= 上，讓下一場停在同一個分頁。
-  const TABS = ['roster', 'seasonpass', 'grouping'];
-  const tabFromUrl = new URLSearchParams(window.location.hash.split('?')[1] || '').get('tab');
-  let activeTab = TABS.includes(tabFromUrl) ? tabFromUrl : 'roster';
+  let activeTab = tabFromUrl(['roster', 'seasonpass', 'grouping'], 'roster');
   let selectedPayingIds = new Set(); // memberId set — covers 臨打 (casual) and unpaid 季打 rows (point 8)
 
   function draw() {
@@ -38,14 +40,12 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
       <div class="page-head page-head-sticky flex-wrap-head">
         <div class="page-head-left">
           ${backButtonHtml()}
-          <div class="session-nav">
-            <button class="session-nav-btn" id="prev-session-btn" type="button" aria-label="上一場" ${prevSession ? '' : 'disabled'}>${NAV_CHEVRON_LEFT}</button>
+          ${pageNavHtml(`
             <div style="min-width:0;">
               <h1 class="h1-nowrap">${fmtDateCompact(session.date)}</h1>
               <div class="sub">${session.timeSlot ? escapeHtml(session.timeSlot) : ''}</div>
             </div>
-            <button class="session-nav-btn" id="next-session-btn" type="button" aria-label="下一場" ${nextSession ? '' : 'disabled'}>${NAV_CHEVRON_RIGHT}</button>
-          </div>
+          `, { hasPrev: !!prevSession, hasNext: !!nextSession, prevLabel: '上一場', nextLabel: '下一場' })}
         </div>
         <div class="flex gap-8">
           <button class="icon-action-btn" id="send-line-btn" aria-label="發送到LINE"><img src="icons/icon-line-button.png" alt=""></button>
@@ -77,14 +77,18 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
     attachBackButton(root);
     root.querySelector('#edit-session-btn').addEventListener('click', () => openEditSessionModal());
     root.querySelector('#send-line-btn').addEventListener('click', () => openSendToLineModal());
-    root.querySelector('#prev-session-btn').addEventListener('click', () => goToSession(prevSession));
-    root.querySelector('#next-session-btn').addEventListener('click', () => goToSession(nextSession));
+    bindPageNav(root, {
+      path: pagePath,
+      prevPath: prevSession ? `/sessions/${prevSession.id}` : null,
+      nextPath: nextSession ? `/sessions/${nextSession.id}` : null,
+      tab: activeTab,
+      firstMsg: '已經是本季第一場',
+      lastMsg: '已經是本季最後一場',
+    });
     root.querySelectorAll('.subtabs button').forEach((btn) => {
       btn.addEventListener('click', () => {
         activeTab = btn.dataset.tab;
-        // 同步把分頁寫回網址（replaceState 不會觸發 hashchange），背景同步
-        // 重新渲染時才會停在同一個分頁。
-        history.replaceState(null, '', `#/sessions/${sessionId}?tab=${activeTab}`);
+        replaceTabInUrl(pagePath, activeTab);
         draw();
       });
     });
@@ -93,21 +97,6 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
     if (activeTab === 'roster') drawRosterTab(tabBody, stats);
     else if (activeTab === 'seasonpass') drawSeasonPassTab(tabBody);
     else renderGroupingTab(tabBody, { sessionId, membersById, attendingMemberIds: computeAttendingMemberIds() });
-  }
-
-  // 用 location.replace 換頁，不新增瀏覽紀錄：不管切了幾場，按一次返回鍵
-  // 都會回到原本的場次列表。
-  function goToSession(target) {
-    if (!target) return;
-    window.location.replace(`#/sessions/${target.id}?tab=${activeTab}`);
-  }
-
-  // 左右滑動切換場次。監聽掛在 root 上但只綁一次（root 是共用的
-  // #view-root），並在觸發時確認目前還停留在這個場次頁。
-  root._sessionSwipe = { prev: prevSession, next: nextSession, go: goToSession, sessionId };
-  if (!root._sessionSwipeBound) {
-    root._sessionSwipeBound = true;
-    bindSessionSwipe(root);
   }
 
   // 分組對戰用的出席名單：跟「人員名單」分頁同一套邏輯（季打出席中 + 臨
@@ -838,58 +827,4 @@ export async function renderSessionDetail(root, seasonId, sessionId) {
   }
 
   draw();
-}
-
-const NAV_CHEVRON_LEFT = '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M14 6 L8 12 L14 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const NAV_CHEVRON_RIGHT = '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M10 6 L16 12 L10 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-const SWIPE_MIN_DISTANCE = 60;   // px
-const SWIPE_MAX_DURATION = 600;  // ms
-const SWIPE_EDGE_GUARD = 24;     // 避開瀏覽器從螢幕邊緣滑動的「返回」手勢
-
-// 從觸控起點往上找，只要經過輸入框或可以水平捲動的區塊（例如較寬的表格），
-// 就不把這次滑動當成切換場次。
-function isSwipeExcludedTarget(el, root) {
-  for (let node = el; node && node !== root; node = node.parentElement) {
-    if (node.matches('input, textarea, select, [contenteditable="true"]')) return true;
-    if (node.scrollWidth > node.clientWidth + 1) {
-      const ox = getComputedStyle(node).overflowX;
-      if (ox === 'auto' || ox === 'scroll') return true;
-    }
-  }
-  return false;
-}
-
-function bindSessionSwipe(root) {
-  let start = null;
-  root.addEventListener('touchstart', (e) => {
-    start = null;
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    if (t.clientX < SWIPE_EDGE_GUARD || t.clientX > window.innerWidth - SWIPE_EDGE_GUARD) return;
-    if (isSwipeExcludedTarget(e.target, root)) return;
-    start = { x: t.clientX, y: t.clientY, time: Date.now() };
-  }, { passive: true });
-
-  root.addEventListener('touchend', (e) => {
-    const nav = root._sessionSwipe;
-    if (!start || !nav) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    const elapsed = Date.now() - start.time;
-    start = null;
-    // 確認目前還在同一個場次頁（root 是各頁共用的容器）。
-    if (!window.location.hash.split('?')[0].endsWith(`/sessions/${nav.sessionId}`)) return;
-    if (elapsed > SWIPE_MAX_DURATION) return;
-    if (Math.abs(dx) < SWIPE_MIN_DISTANCE || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    const target = dx < 0 ? nav.next : nav.prev;
-    if (!target) {
-      toast(dx < 0 ? '已經是本季最後一場' : '已經是本季第一場');
-      return;
-    }
-    nav.go(target);
-  }, { passive: true });
-
-  root.addEventListener('touchcancel', () => { start = null; }, { passive: true });
 }

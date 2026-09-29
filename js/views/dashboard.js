@@ -1,7 +1,7 @@
 import { getAll, getByIndex, getSettings, getById } from '../db.js';
 import { fmtDate, fmtDateOnly, fmtMoney, escapeHtml, todayStr } from '../utils.js';
 import { navigate } from '../router.js';
-import { computeSessionStats, computeSeasonStats, computeSeasonPassSettlement, buildSeasonPassPaidMap } from '../calc.js';
+import { computeSessionStats, buildSeasonPassPaidMap } from '../calc.js';
 
 export async function renderDashboard(root) {
   const seasons = await getAll('seasons');
@@ -35,22 +35,18 @@ export async function renderDashboard(root) {
   const seasonPassPaidMap = buildSeasonPassPaidMap(seasonPasses);
   sessions.forEach((s) => { sessionStatsById[s.id] = computeSessionStats(s, allRosters.filter((r) => r.sessionId === s.id), seasonPassPaidMap); });
 
-  const settlements = seasonPasses.map((sp) => {
-    const rosterMap = {};
-    allRosters.forEach((r) => {
-      if (r.memberId === sp.memberId && r.sourceType === 'seasonPass') rosterMap[r.sessionId] = r;
-    });
-    return { seasonPass: sp, settlement: computeSeasonPassSettlement(sp, sessions, rosterMap, season) };
-  });
-  const seasonPassesWithSettlement = settlements.map((x) => ({ ...x.seasonPass, settlement: x.settlement }));
-  const seasonStats = computeSeasonStats(sessions, sessionStatsById, seasonPassesWithSettlement);
-
   const today = todayStr();
   const upcoming = sessions.filter((s) => s.date >= today).slice(0, 3);
-  // Point 4: 當前盈餘 — surplus summed only across sessions that have already
-  // happened (date < today), not the whole season's scheduled sessions.
+  // 本季速覽只算已經結束的場次(date < today),不是整季排定的場次。
+  // 當前總額 = 已結束場次的臨打已收 + 季打已收(seasonPassIncome 本來就只算
+  // 出席、排除請假的季打，見 calc.js computeSessionStats)。
   const expiredSessions = sessions.filter((s) => s.date < today);
-  const currentSurplus = expiredSessions.reduce((sum, s) => sum + ((sessionStatsById[s.id] && sessionStatsById[s.id].receivedSurplus) || 0), 0);
+  const currentTotal = expiredSessions.reduce((sum, s) => {
+    const st = sessionStatsById[s.id];
+    return sum + (st ? st.received + st.seasonPassIncome : 0);
+  }, 0);
+  const currentExpense = expiredSessions.reduce((sum, s) => sum + ((sessionStatsById[s.id] && sessionStatsById[s.id].expense) || 0), 0);
+  const currentSurplus = currentTotal - currentExpense;
 
   root.innerHTML = `
     <div class="page-head">
@@ -63,11 +59,10 @@ export async function renderDashboard(root) {
 
     <div class="scoreboard">
       <div class="scoreboard-label">本季速覽</div>
-      <div class="scoreboard-grid">
-        <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.received)}</div><div class="cap">已收金額</div></div>
-        <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.receivable)}</div><div class="cap">應收金額</div></div>
-        <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(seasonStats.receivedSurplus)}</div><div class="cap">已收盈餘</div></div>
+      <div class="scoreboard-grid scoreboard-grid-left2-right1">
+        <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(currentTotal)}</div><div class="cap">當前總額</div></div>
         <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(currentSurplus)}</div><div class="cap">當前盈餘</div></div>
+        <div class="scoreboard-cell"><div class="num mono">$${fmtMoney(currentExpense)}</div><div class="cap">當前支出</div></div>
       </div>
     </div>
 

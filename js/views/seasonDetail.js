@@ -10,6 +10,7 @@ import { computeSessionStats, computeSeasonStats, computeSeasonPassSettlement, s
 import { sessionSectionsHtml, openAddSessionModal, sessionDefaultsFieldsHtml, bindSessionDefaultsFieldEvents, readSessionDefaultsFromPanel, applySeasonDefaultsToAllSessions, candidatePickerFieldHtml, bindCandidatePicker } from '../sessionShared.js';
 import { buildSettlementFlexMessage, buildRefundDetailFlexMessage, sendToLineRelay } from '../lineShare.js';
 import { API_BASE_URL } from '../config.js';
+import { pageNavHtml, bindPageNav, tabFromUrl, replaceTabInUrl } from '../pageNav.js';
 
 export async function renderSeasonDetail(root, seasonId) {
   const season = await getById('seasons', seasonId);
@@ -27,7 +28,16 @@ export async function renderSeasonDetail(root, seasonId) {
     allRosters.push(...r);
   }
 
-  let activeTab = 'sessions';
+  // 上一季／下一季：依開始日期由舊到新排序（不分進行中／已結束）。
+  const allSeasons = (await getAll('seasons'))
+    .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '') || (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+  const currentIndex = allSeasons.findIndex((s) => s.id === seasonId);
+  const prevSeason = currentIndex > 0 ? allSeasons[currentIndex - 1] : null;
+  const nextSeason = currentIndex >= 0 && currentIndex < allSeasons.length - 1 ? allSeasons[currentIndex + 1] : null;
+  const pagePath = `/seasons/${seasonId}`;
+
+  // 切換季度時會把目前的分頁帶在網址 ?tab= 上，讓下一季停在同一個分頁。
+  let activeTab = tabFromUrl(['sessions', 'passes', 'ac', 'stats'], 'sessions');
   let selectedPassIds = new Set();
 
   function rostersFor(sessionId) { return allRosters.filter((r) => r.sessionId === sessionId); }
@@ -71,10 +81,12 @@ export async function renderSeasonDetail(root, seasonId) {
       <div class="page-head page-head-sticky flex-wrap-head">
         <div class="page-head-left">
           ${backButtonHtml()}
-          <div style="min-width:0;">
-            <h1 class="h1-nowrap">${escapeHtml(season.name)}・共${sessions.length}場</h1>
-            <div class="sub">${fmtDateOnly(season.startDate)} － ${fmtDateOnly(season.endDate)}</div>
-          </div>
+          ${pageNavHtml(`
+            <div style="min-width:0;">
+              <h1 class="h1-nowrap">${escapeHtml(season.name)}・共${sessions.length}場</h1>
+              <div class="sub">${fmtDateOnly(season.startDate)} － ${fmtDateOnly(season.endDate)}</div>
+            </div>
+          `, { hasPrev: !!prevSeason, hasNext: !!nextSeason, prevLabel: '上一季', nextLabel: '下一季' })}
         </div>
         <button class="icon-action-btn" id="edit-season-btn" aria-label="季度設定"><img src="icons/icon-settings-button.png" alt=""></button>
       </div>
@@ -103,8 +115,20 @@ export async function renderSeasonDetail(root, seasonId) {
 
     attachBackButton(root);
     root.querySelector('#edit-season-btn').addEventListener('click', () => openEditSeasonModal());
+    bindPageNav(root, {
+      path: pagePath,
+      prevPath: prevSeason ? `/seasons/${prevSeason.id}` : null,
+      nextPath: nextSeason ? `/seasons/${nextSeason.id}` : null,
+      tab: activeTab,
+      firstMsg: '已經是第一季',
+      lastMsg: '已經是最後一季',
+    });
     root.querySelectorAll('.subtabs button').forEach((btn) => {
-      btn.addEventListener('click', () => { activeTab = btn.dataset.tab; draw(); });
+      btn.addEventListener('click', () => {
+        activeTab = btn.dataset.tab;
+        replaceTabInUrl(pagePath, activeTab);
+        draw();
+      });
     });
 
     const tabBody = root.querySelector('#tab-body');
