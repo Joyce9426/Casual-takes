@@ -306,6 +306,26 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); }
 }
 .back-btn:active { transform: translateY(1px); }
 
+/* 場次詳細頁的上一場／下一場：刻意做成無底色、品牌綠的細箭頭，跟灰底
+   圓形的返回鍵區分開來。 */
+.session-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.session-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--court-green);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.session-nav-btn:active:not(:disabled) { background: var(--surface-sunken); }
+.session-nav-btn:disabled { color: var(--line); cursor: default; }
+
 .btn {
   display: inline-flex;
   align-items: center;
