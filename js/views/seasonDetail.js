@@ -1,4 +1,4 @@
-import { getById, getByIndex, getAll, put, remove, putMany } from '../db.js';
+import { getById, getByIndex, getAll, put, remove, removeMany, putMany } from '../db.js';
 import { getSettings } from '../db.js';
 import {
   uid, toast, openModal, confirmDialog, escapeHtml, fmtDate, fmtDateOnly, fmtMoney,
@@ -311,9 +311,18 @@ export async function renderSeasonDetail(root, seasonId) {
         e.stopPropagation();
         const sp = seasonPasses.find((x) => x.id === btn.dataset.removePass);
         const m = membersById[sp.memberId];
-        confirmDialog(`確定要將「${escapeHtml(m?.name || '')}」移出本季季打名單嗎？已建立場次的歷史名單不會被回溯修改。`, async () => {
+        confirmDialog(`確定要將「${escapeHtml(m?.name || '')}」移出本季季打名單嗎？本季各場次中此人的季打出席紀錄也會一併移除。`, async () => {
           await remove('seasonPasses', sp.id);
           seasonPasses = seasonPasses.filter((x) => x.id !== sp.id);
+          // Also drop this member's seasonPass rows in every session of the
+          // season — otherwise they keep counting toward 季打人數/季打已收 even
+          // though the session's roster no longer lists them, and re-adding
+          // the same member later would leave duplicate rows behind.
+          const staleRosterIds = allRosters
+            .filter((r) => r.memberId === sp.memberId && r.sourceType === 'seasonPass')
+            .map((r) => r.id);
+          if (staleRosterIds.length) await removeMany('sessionRosters', staleRosterIds);
+          allRosters = allRosters.filter((r) => !staleRosterIds.includes(r.id));
           selectedPassIds.delete(sp.id);
           drawPassesTab(tabBody);
           toast('已移出季打名單');

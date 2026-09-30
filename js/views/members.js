@@ -26,11 +26,15 @@ export async function renderMembers(root) {
   // Point: 人員名單需要能直接看到每位成員出現過的場次（含候補/季打），因此把
   // sessions / seasons / sessionRosters 一次讀進來，用 memberId 分組，
   // 展開某個人時直接查表即可，不用每次都重新掃描整個資料庫。
-  const [allSessions, allSeasons, allRosters] = await Promise.all([
+  const [allSessions, allSeasons, allRosters, allSeasonPasses] = await Promise.all([
     getAll('sessions'),
     getAll('seasons'),
     getAll('sessionRosters'),
+    getAll('seasonPasses'),
   ]);
+  // 已移出季打名單的人，舊資料可能還留著該季場次的季打紀錄——只認仍在該季
+  // 季打名單上的人，跟場次頁的顯示一致。
+  const seasonPassKeys = new Set(allSeasonPasses.map((sp) => `${sp.seasonId}|${sp.memberId}`));
   const sessionsById = Object.fromEntries(allSessions.map((s) => [s.id, s]));
   const seasonsById = Object.fromEntries(allSeasons.map((s) => [s.id, s]));
   const rostersByMemberId = allRosters.reduce((acc, r) => {
@@ -46,6 +50,7 @@ export async function renderMembers(root) {
       .filter((r) => !(r.sourceType === 'seasonPass' && r.attendance === '請假'))
       .map((r) => ({ roster: r, session: sessionsById[r.sessionId] }))
       .filter((x) => x.session)
+      .filter((x) => x.roster.sourceType !== 'seasonPass' || seasonPassKeys.has(`${x.session.seasonId}|${x.roster.memberId}`))
       .map((x) => ({
         sessionId: x.session.id,
         date: x.session.date,

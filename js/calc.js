@@ -44,13 +44,15 @@ export function isRosterPaid(row) {
   return Boolean(row.paymentMethod);
 }
 
-// Builds a { memberId: true } lookup of season passes that are actually paid
-// at the season level — used by computeSessionStats to tell "this member's
-// flat season-pass fee is already covered by their prepayment" apart from
-// "this member never prepaid, so only counts if they paid THIS session".
+// Builds a { memberId: isPaid } lookup covering every season pass in the
+// season — used by computeSessionStats to tell "this member's flat
+// season-pass fee is already covered by their prepayment" (true) apart from
+// "this member never prepaid, so only counts if they paid THIS session"
+// (false). A memberId missing from the map entirely means they're no longer
+// on this season's 季打名單, so their leftover seasonPass roster rows are ignored.
 export function buildSeasonPassPaidMap(seasonPasses) {
   const map = {};
-  seasonPasses.forEach((sp) => { if (sp.paymentStatus === '已繳') map[sp.memberId] = true; });
+  seasonPasses.forEach((sp) => { map[sp.memberId] = sp.paymentStatus === '已繳'; });
   return map;
 }
 
@@ -65,8 +67,10 @@ export function buildSeasonPassPaidMap(seasonPasses) {
 export function computeSessionStats(session, rosters, seasonPassPaidByMemberId = {}) {
   const casualRows = rosters.filter((r) => r.sourceType === 'casual');
   const waitlistRows = rosters.filter((r) => r.sourceType === 'waitlist');
-  const seasonPassLeave = rosters.filter((r) => r.sourceType === 'seasonPass' && r.attendance === '請假');
-  const seasonPassRows = rosters.filter((r) => r.sourceType === 'seasonPass');
+  // Only members still on the season's 季打名單 count — data from before
+  // 移出季打名單 also cleaned up roster rows can still have leftover
+  // seasonPass rows for removed members, which the roster tab doesn't show.
+  const seasonPassRows = rosters.filter((r) => r.sourceType === 'seasonPass' && r.memberId in seasonPassPaidByMemberId);
   const seasonPassAttendingRows = seasonPassRows.filter((r) => r.attendance !== '請假');
   const seasonPassAttendingCount = seasonPassAttendingRows.length;
   // A season-pass member who hasn't prepaid the season fee can instead pay for
@@ -121,7 +125,7 @@ export function computeSessionStats(session, rosters, seasonPassPaidByMemberId =
     totalCollected,
     attendeeCount: seasonPassAttendingCount + casualRows.length,
     seasonPassAttendingCount,
-    seasonPassLeaveCount: seasonPassLeave.length,
+    seasonPassLeaveCount: seasonPassRows.length - seasonPassAttendingCount,
     casualCount: casualRows.length,
     waitlistCount: waitlistRows.length,
   };
