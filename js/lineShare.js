@@ -289,7 +289,8 @@ export function buildSettlementFlexMessage(season, settlements, membersById) {
 // Builds the season-pass refund-detail Flex Message for ONE member: the
 // 總退費金額 on top, then two card-style sections — 請假 (date + refunded
 // flat fee) and 冷氣 (date + usage status tag + refund/extra charge, one row
-// per session in date order). A section with no rows is omitted entirely.
+// per session in date order). Both sections are always shown; one with no
+// rows shows 無請假退費 / 無冷氣退費 instead.
 // settlement is whatever computeSeasonPassSettlement() returned for this
 // member (rows already sorted by date and carrying acUsage/acRefund/acExtraCharge).
 // ---------------------------------------------------------------------------
@@ -327,8 +328,9 @@ function refundSectionHeader(title, countText, total) {
     layout: 'horizontal',
     alignItems: 'center',
     contents: [
-      { type: 'text', text: title, size: 'md', weight: 'bold', color: COLOR_REFUND_PRIMARY_TEXT, flex: 0 },
-      { type: 'text', text: countText, size: 'xxs', color: COLOR_REFUND_MUTED_TEXT, margin: 'sm', flex: 1, gravity: 'center' },
+      { type: 'text', text: title, size: 'md', weight: 'bold', color: COLOR_REFUND_PRIMARY_TEXT, flex: countText ? 0 : 1 },
+      // LINE rejects empty text, so the count is left out entirely when there is none.
+      ...(countText ? [{ type: 'text', text: countText, size: 'xxs', color: COLOR_REFUND_MUTED_TEXT, margin: 'sm', flex: 1, gravity: 'center' }] : []),
       { type: 'text', text: refundMoneyText(total), size: 'md', weight: 'bold', color: total < 0 ? COLOR_EXTRA_CHARGE_TEXT : COLOR_REFUND_TEXT, align: 'end', flex: 0 },
     ],
   };
@@ -377,7 +379,18 @@ function acUsageTag(tag) {
   };
 }
 
+// Shown in place of a section's rows when it has nothing to list — the
+// section itself is always drawn so both 請假 and 冷氣 are visible.
+function emptyRefundSection(title, emptyText) {
+  return refundSection([
+    refundSectionHeader(title, '', 0),
+    { type: 'separator', color: COLOR_REFUND_SECTION_LINE },
+    { type: 'text', text: emptyText, size: 'sm', color: COLOR_REFUND_MUTED_TEXT, align: 'center' },
+  ]);
+}
+
 function buildLeaveSection(leaveRows) {
+  if (leaveRows.length === 0) return emptyRefundSection('請假', '無請假退費');
   const total = leaveRows.reduce((sum, r) => sum + r.fee, 0);
   return refundSection([
     refundSectionHeader('請假', `${leaveRows.length} 次`, total),
@@ -395,6 +408,7 @@ function buildLeaveSection(leaveRows) {
 }
 
 function buildAcSection(acRows) {
+  if (acRows.length === 0) return emptyRefundSection('冷氣', '無冷氣退費');
   const amountOf = (r) => r.acRefund - r.acExtraCharge;
   const total = acRows.reduce((sum, r) => sum + amountOf(r), 0);
   return refundSection([
@@ -435,11 +449,7 @@ export function buildRefundDetailFlexMessage(season, member, settlement) {
       ],
     },
   ];
-  if (leaveRows.length) bodyContents.push(buildLeaveSection(leaveRows));
-  if (acRows.length) bodyContents.push(buildAcSection(acRows));
-  if (!leaveRows.length && !acRows.length) {
-    bodyContents.push({ type: 'text', text: '本季沒有退費或補繳項目', size: 'sm', color: COLOR_REFUND_MUTED_TEXT, align: 'center' });
-  }
+  bodyContents.push(buildLeaveSection(leaveRows), buildAcSection(acRows));
 
   const subtitle = [member?.name, season?.name].filter(Boolean).join(' · ');
   return {
