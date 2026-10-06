@@ -286,16 +286,29 @@ export function buildSettlementFlexMessage(season, settlements, membersById) {
 }
 
 // ---------------------------------------------------------------------------
-// Builds the season-pass refund-detail Flex Message for ONE member — a
-// two-part breakdown: 請假 (leave sessions, full flat fee refunded) and 冷氣
-// (AC adjustment, split into 無/部分使用/其他-需補繳 sub-groups). Any
-// sub-group with zero sessions is omitted entirely rather than shown as
-// empty. settlement is whatever computeSeasonPassSettlement() returned for
-// this member (already carries acNoneRows/acPartialRows/acExtraChargeRows).
+// Builds the season-pass refund-detail Flex Message for ONE member: the
+// 總退費金額 on top, then two card-style sections — 請假 (date + refunded
+// flat fee) and 冷氣 (date + usage status tag + refund/extra charge, one row
+// per session in date order). A section with no rows is omitted entirely.
+// settlement is whatever computeSeasonPassSettlement() returned for this
+// member (rows already sorted by date and carrying acUsage/acRefund/acExtraCharge).
 // ---------------------------------------------------------------------------
 const COLOR_REFUND_HEADER_BG = '#0F6E56';
+const COLOR_REFUND_TEXT = '#1F6F54';
+const COLOR_REFUND_SECTION_BG = '#F3F8F5';
+const COLOR_REFUND_SECTION_LINE = '#DCE8E1';
+const COLOR_REFUND_PRIMARY_TEXT = '#16211C';
+const COLOR_REFUND_MUTED_TEXT = '#8A9790';
 const COLOR_EXTRA_CHARGE_BG = '#FBE6E4';
 const COLOR_EXTRA_CHARGE_TEXT = '#B3261E';
+
+// 冷氣狀態標籤：acUsage → 文字 / 底色 / 字色。'even'（實際費用剛好等於基準）
+// 沒有退費也沒有補繳，不列出。
+const AC_USAGE_TAGS = {
+  none: { label: '無', bg: '#E1F5EE', color: '#085041' },
+  partial: { label: '部分使用', bg: '#FAEEDA', color: '#633806' },
+  over: { label: '需補繳', bg: COLOR_EXTRA_CHARGE_BG, color: COLOR_EXTRA_CHARGE_TEXT },
+};
 
 // "7/12" — month/day with no leading zero, no year, no weekday (space is tight).
 function formatShortDate(dateStr) {
@@ -303,119 +316,132 @@ function formatShortDate(dateStr) {
   return `${d.getMonth() + 1}/${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function refundDateAmountRow(dateStr, amountText, { indent = false, danger = false } = {}) {
+// Signed money text: refunds as "$80", extra charges as "−$30".
+function refundMoneyText(amount) {
+  return `${amount < 0 ? '−' : ''}$${fmtMoney(Math.abs(amount))}`;
+}
+
+function refundSectionHeader(title, countText, total) {
   return {
     type: 'box',
     layout: 'horizontal',
-    paddingStart: indent ? '12px' : undefined,
+    alignItems: 'center',
     contents: [
-      { type: 'text', text: formatShortDate(dateStr), size: 'xs', color: danger ? COLOR_EXTRA_CHARGE_TEXT : '#8A9790', flex: 3 },
-      { type: 'text', text: amountText, size: 'xs', color: danger ? COLOR_EXTRA_CHARGE_TEXT : '#8A9790', align: 'end', flex: 2 },
+      { type: 'text', text: title, size: 'md', weight: 'bold', color: COLOR_REFUND_PRIMARY_TEXT, flex: 0 },
+      { type: 'text', text: countText, size: 'xxs', color: COLOR_REFUND_MUTED_TEXT, margin: 'sm', flex: 1, gravity: 'center' },
+      { type: 'text', text: refundMoneyText(total), size: 'md', weight: 'bold', color: total < 0 ? COLOR_EXTRA_CHARGE_TEXT : COLOR_REFUND_TEXT, align: 'end', flex: 0 },
     ],
   };
 }
 
-function refundSubgroup(label, rows, amountKey, { danger = false } = {}) {
-  if (rows.length === 0) return null;
-  const total = rows.reduce((sum, r) => sum + r[amountKey], 0);
-  const sign = danger ? '+' : '';
-  const contents = [
-    {
-      type: 'box',
-      layout: 'horizontal',
-      margin: 'sm',
-      contents: [
-        { type: 'text', text: `${label}（${rows.length}場）`, size: 'sm', weight: 'bold', color: danger ? COLOR_EXTRA_CHARGE_TEXT : '#1F6F54', flex: 3 },
-        { type: 'text', text: `${sign}$${fmtMoney(total)}`, size: 'sm', weight: 'bold', color: danger ? COLOR_EXTRA_CHARGE_TEXT : '#1F6F54', align: 'end', flex: 2 },
-      ],
-    },
-    ...rows.map((r) => refundDateAmountRow(r.date, `${sign}$${fmtMoney(r[amountKey])}`, { indent: true, danger })),
-  ];
-  if (!danger) return { type: 'box', layout: 'vertical', contents, margin: 'md' };
+// Column captions under a section header — columns: [{ text, flex, align? }].
+function refundColumnCaptions(columns) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    contents: columns.map((c) => ({ type: 'text', text: c.text, size: 'xxs', color: COLOR_REFUND_MUTED_TEXT, flex: c.flex, ...(c.align ? { align: c.align } : {}) })),
+  };
+}
+
+function refundSection(contents) {
   return {
     type: 'box',
     layout: 'vertical',
+    backgroundColor: COLOR_REFUND_SECTION_BG,
+    cornerRadius: '10px',
+    paddingAll: '12px',
+    spacing: 'sm',
     contents,
-    margin: 'md',
-    backgroundColor: COLOR_EXTRA_CHARGE_BG,
-    cornerRadius: '8px',
-    paddingAll: '10px',
   };
+}
+
+function acUsageTag(tag) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    flex: 3,
+    contents: [
+      {
+        type: 'box',
+        layout: 'vertical',
+        flex: 0,
+        backgroundColor: tag.bg,
+        cornerRadius: '4px',
+        paddingStart: '6px',
+        paddingEnd: '6px',
+        paddingTop: '2px',
+        paddingBottom: '2px',
+        contents: [{ type: 'text', text: tag.label, size: 'xxs', color: tag.color }],
+      },
+    ],
+  };
+}
+
+function buildLeaveSection(leaveRows) {
+  const total = leaveRows.reduce((sum, r) => sum + r.fee, 0);
+  return refundSection([
+    refundSectionHeader('請假', `${leaveRows.length} 次`, total),
+    { type: 'separator', color: COLOR_REFUND_SECTION_LINE },
+    refundColumnCaptions([{ text: '日期', flex: 3 }, { text: '退費', flex: 2, align: 'end' }]),
+    ...leaveRows.map((r) => ({
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        { type: 'text', text: formatShortDate(r.date), size: 'sm', color: COLOR_REFUND_PRIMARY_TEXT, flex: 3 },
+        { type: 'text', text: refundMoneyText(r.fee), size: 'sm', color: COLOR_REFUND_TEXT, align: 'end', flex: 2 },
+      ],
+    })),
+  ]);
+}
+
+function buildAcSection(acRows) {
+  const amountOf = (r) => r.acRefund - r.acExtraCharge;
+  const total = acRows.reduce((sum, r) => sum + amountOf(r), 0);
+  return refundSection([
+    refundSectionHeader('冷氣', `${acRows.length} 場`, total),
+    { type: 'separator', color: COLOR_REFUND_SECTION_LINE },
+    refundColumnCaptions([{ text: '日期', flex: 2 }, { text: '狀態', flex: 3 }, { text: '退費', flex: 2, align: 'end' }]),
+    ...acRows.map((r) => {
+      const amount = amountOf(r);
+      const danger = amount < 0;
+      return {
+        type: 'box',
+        layout: 'horizontal',
+        alignItems: 'center',
+        contents: [
+          { type: 'text', text: formatShortDate(r.date), size: 'sm', color: danger ? COLOR_EXTRA_CHARGE_TEXT : COLOR_REFUND_PRIMARY_TEXT, flex: 2 },
+          acUsageTag(AC_USAGE_TAGS[r.acUsage]),
+          { type: 'text', text: refundMoneyText(amount), size: 'sm', color: danger ? COLOR_EXTRA_CHARGE_TEXT : COLOR_REFUND_TEXT, align: 'end', flex: 2 },
+        ],
+      };
+    }),
+  ]);
 }
 
 export function buildRefundDetailFlexMessage(season, member, settlement) {
   const leaveRows = settlement.rows.filter((r) => r.attendance === '請假');
-  const leaveTotal = leaveRows.reduce((sum, r) => sum + r.fee, 0);
+  const acRows = settlement.rows.filter((r) => AC_USAGE_TAGS[r.acUsage]);
 
-  const acSubgroups = [
-    refundSubgroup('無', settlement.acNoneRows, 'acRefund'),
-    refundSubgroup('部分使用', settlement.acPartialRows, 'acRefund'),
-    refundSubgroup('其他，需補繳', settlement.acExtraChargeRows, 'acExtraCharge', { danger: true }),
-  ].filter(Boolean);
-
-  const hasAnySection = leaveRows.length > 0 || acSubgroups.length > 0;
   const bodyContents = [
     {
       type: 'box',
       layout: 'vertical',
       alignItems: 'center',
+      paddingTop: '4px',
+      paddingBottom: '6px',
       contents: [
-        { type: 'text', text: '總退費金額', size: 'xs', color: '#8A9790' },
-        { type: 'text', text: `$${fmtMoney(settlement.refundAmount - settlement.makeupAmount)}`, size: 'xxl', weight: 'bold', color: '#1F6F54', margin: 'xs' },
+        { type: 'text', text: '總退費金額', size: 'xs', color: COLOR_REFUND_MUTED_TEXT },
+        { type: 'text', text: refundMoneyText(settlement.refundAmount - settlement.makeupAmount), size: 'xxl', weight: 'bold', color: COLOR_REFUND_TEXT, margin: 'xs' },
       ],
     },
-    // Only draw this separator if there's actually a section coming after
-    // it — otherwise (bugfix) a member with e.g. only an AC section and no
-    // 請假 section would get this separator PLUS the 冷氣 section's own
-    // leading separator back-to-back, showing as a doubled-up line.
-    ...(hasAnySection ? [{ type: 'separator', margin: 'lg' }] : []),
   ];
-
-  if (leaveRows.length) {
-    bodyContents.push({
-      type: 'box',
-      layout: 'horizontal',
-      margin: 'sm',
-      alignItems: 'center',
-      contents: [
-        {
-          type: 'text',
-          contents: [
-            { type: 'span', text: '請假', size: 'md', weight: 'bold', color: '#16211C' },
-            { type: 'span', text: `　（${leaveRows.length}次）`, size: 'xxs', color: '#8A9790' },
-          ],
-          flex: 3,
-        },
-        { type: 'text', text: `$${fmtMoney(leaveTotal)}`, size: 'md', weight: 'bold', color: '#1F6F54', align: 'end', flex: 2 },
-      ],
-    });
-    leaveRows.forEach((r) => bodyContents.push(refundDateAmountRow(r.date, `$${fmtMoney(r.fee)}`, { indent: true })));
+  if (leaveRows.length) bodyContents.push(buildLeaveSection(leaveRows));
+  if (acRows.length) bodyContents.push(buildAcSection(acRows));
+  if (!leaveRows.length && !acRows.length) {
+    bodyContents.push({ type: 'text', text: '本季沒有退費或補繳項目', size: 'sm', color: COLOR_REFUND_MUTED_TEXT, align: 'center' });
   }
 
-  if (acSubgroups.length) {
-    const acNetTotal = settlement.acNoneTotal + settlement.acPartialTotal - settlement.acExtraChargeTotal;
-    const acNetIsCharge = acNetTotal < 0;
-    // Bugfix: only need a separator here to divide it from a 請假 section
-    // that was actually rendered above — if there was none, the top-level
-    // separator (right after 總退費金額) already did that job.
-    if (leaveRows.length) bodyContents.push({ type: 'separator', margin: 'lg' });
-    bodyContents.push({
-      type: 'box',
-      layout: 'horizontal',
-      margin: 'sm',
-      alignItems: 'center',
-      contents: [
-        { type: 'text', text: '冷氣', size: 'md', weight: 'bold', color: '#16211C', flex: 3 },
-        { type: 'text', text: `${acNetIsCharge ? '+' : ''}$${fmtMoney(Math.abs(acNetTotal))}`, size: 'md', weight: 'bold', color: acNetIsCharge ? COLOR_EXTRA_CHARGE_TEXT : '#1F6F54', align: 'end', flex: 2 },
-      ],
-    });
-    acSubgroups.forEach((g) => bodyContents.push(g));
-  }
-
-  if (!leaveRows.length && !acSubgroups.length) {
-    bodyContents.push({ type: 'text', text: '本季沒有退費或補繳項目', size: 'sm', color: '#8A9790', margin: 'lg' });
-  }
-
+  const subtitle = [member?.name, season?.name].filter(Boolean).join(' · ');
   return {
     type: 'flex',
     altText: `${member?.name || ''} 季打退費詳情`,
@@ -425,15 +451,18 @@ export function buildRefundDetailFlexMessage(season, member, settlement) {
       header: {
         type: 'box',
         layout: 'vertical',
+        paddingAll: '16px',
         contents: [
           { type: 'text', text: '季打退費詳情', weight: 'bold', size: 'lg', color: '#ffffff' },
-          { type: 'text', text: member?.name || '', size: 'sm', color: '#D7E8DF', margin: 'xs' },
+          { type: 'text', text: subtitle || ' ', size: 'sm', color: '#D7E8DF', margin: 'xs' },
         ],
         backgroundColor: COLOR_REFUND_HEADER_BG,
       },
       body: {
         type: 'box',
         layout: 'vertical',
+        paddingAll: '14px',
+        spacing: 'md',
         contents: bodyContents,
       },
     },
