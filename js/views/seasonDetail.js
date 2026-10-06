@@ -10,7 +10,11 @@ import { computeSessionStats, computeSeasonStats, computeSeasonPassSettlement, s
 import { sessionSectionsHtml, openAddSessionModal, sessionDefaultsFieldsHtml, bindSessionDefaultsFieldEvents, readSessionDefaultsFromPanel, applySeasonDefaultsToAllSessions, candidatePickerFieldHtml, bindCandidatePicker } from '../sessionShared.js';
 import { buildSettlementFlexMessage, buildRefundDetailFlexMessage, sendToLineRelay } from '../lineShare.js';
 import { API_BASE_URL } from '../config.js';
+import { api } from '../api.js';
+import { getViewingAs } from '../session.js';
 import { pageNavHtml, bindPageNav, tabFromUrl, replaceTabInUrl } from '../pageNav.js';
+
+const SYNC_ICON_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 13a8 8 0 0 0 14.6 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 3v4h4M19 21v-4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 export async function renderSeasonDetail(root, seasonId) {
   const season = await getById('seasons', seasonId);
@@ -667,7 +671,10 @@ export async function renderSeasonDetail(root, seasonId) {
       <div class="card">
         <div class="flex-between" style="margin-bottom:6px;">
           <div class="card-title" style="margin-bottom:0;">季打退款 / 補收結算</div>
-          <button class="icon-action-btn" id="send-settlement-line-btn" aria-label="發送到LINE"><img src="icons/icon-line-button.png" alt=""></button>
+          <div class="flex gap-8">
+            <button class="icon-action-btn" id="sync-settlement-btn" aria-label="同步季打結算（不發送訊息）">${SYNC_ICON_SVG}</button>
+            <button class="icon-action-btn" id="send-settlement-line-btn" aria-label="發送到LINE"><img src="icons/icon-line-button.png" alt=""></button>
+          </div>
         </div>
         <div class="small text-faint mt-8" style="margin-bottom:8px;">退費以「-」顯示，需要補繳則以「+」標紅顯示。點擊姓名可看詳細內容。</div>
         ${settlements.length === 0 ? '<div class="small text-faint">本季尚無季打名單</div>' : `
@@ -703,6 +710,8 @@ export async function renderSeasonDetail(root, seasonId) {
     });
     const sendBtn = tabBody.querySelector('#send-settlement-line-btn');
     if (sendBtn) sendBtn.addEventListener('click', () => openSendSettlementToLineModal(settlements));
+    const syncBtn = tabBody.querySelector('#sync-settlement-btn');
+    if (syncBtn) syncBtn.addEventListener('click', () => syncSettlementForLine(settlements, syncBtn));
   }
 
   function settlementRow({ seasonPass, settlement }) {
@@ -850,6 +859,42 @@ export async function renderSeasonDetail(root, seasonId) {
     }
   }
 
+  // Stores the whole settlement summary card under the logged-in account, so
+  // typing $refund in a group (one listed in 常用聊天室) replies with it.
+  // Only the latest sync per account is kept — syncing another season
+  // overwrites it.
+  async function storeSettlementSummary(settlements) {
+    try {
+      await api.storeSettlementSummary({
+        seasonId: season.id,
+        seasonName: season.name,
+        message: buildSettlementFlexMessage(season, settlements, membersById),
+      }, getViewingAs()?.id || null);
+      return { ok: true };
+    } catch (err) {
+      console.warn('Failed to store settlement summary:', err);
+      return { ok: false };
+    }
+  }
+
+  // 「只同步」：update what $refund and the name postbacks return, without
+  // posting anything to the LINE group.
+  async function syncSettlementForLine(settlements, btn) {
+    if (settlements.length === 0) { toast('本季尚無季打名單，無需同步'); return; }
+    btn.disabled = true;
+    try {
+      const [summaryResult, detailResult] = await Promise.all([
+        storeSettlementSummary(settlements),
+        storeRefundDetailsForPostback(settlements),
+      ]);
+      if (summaryResult.ok && detailResult.ok) toast('已同步季打結算，可在群組輸入 $refund 查詢');
+      else if (summaryResult.ok) toast('總表已同步，但退費詳情儲存失敗，點擊姓名可能查不到個人詳情');
+      else toast('同步失敗，請確認網路連線後再試一次');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function openSendSettlementToLineModal(settlements) {
     if (!settings.lineTargets || settings.lineTargets.length === 0) {
       openModal({
@@ -897,11 +942,16 @@ export async function renderSeasonDetail(root, seasonId) {
               // flight fire-and-forget fetch can get killed by the browser
               // before it ever reaches the Worker (mobile browsers throttle
               // background tabs aggressively).
-              const storeResult = await storeRefundDetailsForPostback(settlements);
+              const [storeResult, summaryResult] = await Promise.all([
+                storeRefundDetailsForPostback(settlements),
+                storeSettlementSummary(settlements),
+              ]);
               close();
-              toast(storeResult.ok
-                ? `已發送到「${target.name}」`
-                : `已發送到「${target.name}」，但退費詳情儲存失敗，點擊姓名可能查不到個人詳情`);
+              toast(!storeResult.ok
+                ? `已發送到「${target.name}」，但退費詳情儲存失敗，點擊姓名可能查不到個人詳情`
+                : !summaryResult.ok
+                  ? `已發送到「${target.name}」，但總表同步失敗，$refund 可能查不到最新結算`
+                  : `已發送到「${target.name}」`);
             } catch (err) {
               toast(err.message || '發送失敗');
             }

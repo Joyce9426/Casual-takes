@@ -60,6 +60,11 @@ export const api = {
     if (asUserId) params.set('as_user', asUserId);
     return request(`/sync/pull?${params.toString()}`);
   },
+
+  storeSettlementSummary: (payload, asUserId) => {
+    const qs = asUserId ? `?as_user=${encodeURIComponent(asUserId)}` : '';
+    return request(`/settlement-summary/store${qs}`, { method: 'POST', body: payload });
+  },
 };
 
 export { ApiError };
