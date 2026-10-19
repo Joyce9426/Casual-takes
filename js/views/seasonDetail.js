@@ -971,7 +971,7 @@ export async function renderSeasonDetail(root, seasonId) {
         </div>
         <div class="field"><label>季度名稱</label><input type="text" id="edit-name" value="${escapeHtml(season.name)}"></div>
         <div class="field"><label>預計場次數</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="edit-count" value="${season.estimatedSessionCount}"></div>
-        <div class="field"><label>季打整季預收金額（每人）</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="edit-fee" value="${season.seasonPassFee}"></div>
+        <div class="field"><label>季打整季預收金額（每人）</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="edit-fee" value="${season.seasonPassFee}"><div class="field-hint">修改後會同步更新本季所有「未繳」季打人員的預收金額；已繳的人維持原金額不變。</div></div>
         <div class="field">
           <label>預設人均冷氣費</label>
           <input type="text" inputmode="numeric" pattern="[0-9]*" id="edit-ac-baseline" value="${season.acFeePerPersonBaseline ?? 45}">
@@ -1002,14 +1002,32 @@ export async function renderSeasonDetail(root, seasonId) {
               acFeePerPersonBaseline: Number(panel.querySelector('#edit-ac-baseline').value) || 0,
               ...template,
             };
+            const feeChanged = updated.seasonPassFee !== (Number(season.seasonPassFee) || 0);
             await put('seasons', updated);
             Object.assign(season, updated);
             const updatedSessions = await applySeasonDefaultsToAllSessions(seasonId, template);
             sessions = sessions.map((s) => updatedSessions.find((u) => u.id === s.id) || s);
+            // When the season-level prepaid fee changes, carry it over to every
+            // season pass that hasn't paid yet. 已繳 passes keep their amount —
+            // that's money actually collected, and settlement only counts
+            // prepaidAmount for 已繳 anyway, so unpaid passes are safe to overwrite.
+            let syncedPassCount = 0;
+            if (feeChanged) {
+              const passUpdates = seasonPasses
+                .filter((sp) => sp.paymentStatus !== '已繳' && (Number(sp.prepaidAmount) || 0) !== updated.seasonPassFee)
+                .map((sp) => ({ ...sp, prepaidAmount: updated.seasonPassFee }));
+              if (passUpdates.length) {
+                await putMany('seasonPasses', passUpdates);
+                seasonPasses = seasonPasses.map((sp) => passUpdates.find((u) => u.id === sp.id) || sp);
+              }
+              syncedPassCount = passUpdates.length;
+            }
             close();
             await refreshTopbar();
             draw();
-            toast('已更新季度設定，並同步套用到本季所有場次');
+            toast(syncedPassCount
+              ? `已更新季度設定，並同步套用到本季所有場次；另同步更新 ${syncedPassCount} 位未繳季打的預收金額`
+              : '已更新季度設定，並同步套用到本季所有場次');
           },
         },
       ],
