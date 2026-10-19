@@ -213,6 +213,25 @@ export function toast(msg) {
 // the exact scroll position on close.
 let bodyScrollLocked = false;
 let savedScrollY = 0;
+
+// iOS Safari: when the keyboard opens for a text field inside the modal,
+// Safari scrolls the window to bring it into view. If focus then moves
+// straight to a <select> (keyboard swaps to the picker) that scroll offset
+// is never undone, so taps get hit-tested at the wrong place — the 儲存
+// button stops responding and tapping one field opens the one below it.
+// The body is position:fixed while a modal is open, so the window should
+// always sit at 0: snap it back whenever nobody is typing.
+function isTypingTarget(el) {
+  if (!el) return false;
+  if (el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
+  return el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file'].includes(el.type);
+}
+function resetModalViewport() {
+  setTimeout(() => {
+    if (!bodyScrollLocked || isTypingTarget(document.activeElement)) return;
+    if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+  }, 60);
+}
 function lockBodyScroll() {
   if (bodyScrollLocked) return;
   bodyScrollLocked = true;
@@ -222,10 +241,12 @@ function lockBodyScroll() {
   document.body.style.left = '0';
   document.body.style.right = '0';
   document.body.style.width = '100%';
+  window.visualViewport?.addEventListener('resize', resetModalViewport);
 }
 function unlockBodyScroll() {
   if (!bodyScrollLocked) return;
   bodyScrollLocked = false;
+  window.visualViewport?.removeEventListener('resize', resetModalViewport);
   document.body.style.position = '';
   document.body.style.top = '';
   document.body.style.left = '';
@@ -268,6 +289,8 @@ export function openModal(opts) {
 
   panel.querySelector('[data-close]').addEventListener('click', close);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  panel.addEventListener('focusout', resetModalViewport);
+  panel.addEventListener('change', resetModalViewport);
 
   const actionsRoot = panel.querySelector('[data-actions]');
   (opts.actions || []).forEach((a) => {
